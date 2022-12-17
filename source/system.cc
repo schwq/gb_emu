@@ -1,10 +1,23 @@
 #include "system.hpp"
 
 template<typename U>
-void SYSTEM::LogError(const char* msg, U error) noexcept {
-    if(error == NULL) {
-        std::cout << msg << std::endl;
-    } else {
-        std::cout << msg << " " << error << std::endl;
-    }
+void SYSTEM::LogError(const U& msg) noexcept {
+    std::cerr << msg << std::endl;
+}
+
+template<typename U, typename... T>
+void SYSTEM::LogError(const U& u, const T&... t) noexcept {
+    std::cerr << u << ", ";
+    LogError(t...);
+}
+
+template<typename U>
+void SYSTEM::LogMsg(const U& msg) noexcept {
+    std::cout << msg << std::end;
+}
+
+template<typename U, typename... T>
+void SYSTEM::LogMsg(const U& u, const T&... t) noexcept {
+    std::cout << u << ", ";
+    LogMsg(t...);
 }

@@ -9,6 +9,8 @@
 #include <string>
 #include <stdlib.h>
 #include <stdio.h>
+#include <SDL2/SDL.h>
+#include <map>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -19,5 +21,7 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 typedef std::string string;
+#define NEWLINE "\n";
+#define DEBUG
 
 #endif // INCLUDE_HEADER
