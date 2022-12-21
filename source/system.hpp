@@ -19,6 +19,8 @@ public:
     template<typename U, typename... T>
     void LogMsg(const U& u, const T&... t) noexcept;
 
+    void logMessage(const char* _msg) noexcept;
+
 };
 
 #endif // SYSTEM_HEADER

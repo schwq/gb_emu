@@ -4,20 +4,6 @@
 CARTRIDGE::CARTRIDGE(MEMORY& mem) : memory(mem) {}
 CARTRIDGE::~CARTRIDGE() { free(data); }
 
-void CARTRIDGE::mapMemoryData() {
-    switch(header.cartridgeType) {
-        case 0x00:
-            for(int x = 0; x < 0x7FFF; x++) {
-                memory.writeMem(x, data[x]);
-                break;
-            }
-        case 0x01:
-            for(int x = 0; x < 0x3FFF; x++) {
-                memory.writeMem(x, data[x]);
-            } 
-    }
-}
-
 void CARTRIDGE::cartridgeHeader() {
     
     // Entry Point vector 0x0100 - 0x0103

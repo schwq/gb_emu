@@ -21,3 +21,7 @@ void SYSTEM::LogMsg(const U& u, const T&... t) noexcept {
     std::cout << u << ", ";
     LogMsg(t...);
 }
+
+void SYSTEM::logMessage(const char* _msg) noexcept {
+    std::cout << _msg << std::endl;
+}
