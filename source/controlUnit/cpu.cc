@@ -28,7 +28,7 @@ void CPU::setFlag(bool value, FLAGS flag) {
 }
 
 u16 CPU::u8Tou16(u8 r1, u8 r2) {
-    return (r1 << 8) | r2;
+    return (r2 << 8) | r1;
 }
 
 u8 &CPU::lookupRegU8(operand opt) {
@@ -80,15 +80,12 @@ void CPU::instructionExecute(instruction inst) {
                     ram.writeU8(lookupRegU16(inst.op01), lookupRegU8(inst.op02));
                     break;
                 case AM_R_R:
+                    if(inst.op01 == reg_sp && inst.op02 == reg_hl) {
+                        reg.SP = reg.HL;
+                        break;
+                    }
                     lookupRegU8(inst.op01) = lookupRegU8(inst.op02);
-                    break;
-                case AM_R_D16:
-                    u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
-                    lookupRegU16(inst.op01) = nn;
-                    break;
-                case AM_R_D8:
-                    lookupRegU8(inst.op01) = ram.readU8(reg.PC++);
-                    break;
+                    break;  
                 case AM_R_MR:
                     lookupRegU8(inst.op01) = ram.readU8(lookupRegU16(inst.op02));
                     break;
@@ -104,7 +101,34 @@ void CPU::instructionExecute(instruction inst) {
                 case AM_HLD_R:
                     ram.writeU8(ram.readU8(reg.HL--), lookupRegU8(inst.op02));
                     break;
+                case AM_HL_SPR:
+                    // config
+                    break;
+                case AM_MR_D8:
+                    u8 nn = ram.readU8(reg.PC++);
+                    ram.writeU8(lookupRegU16(inst.op01), nn);
+                    break;
+                case AM_A16_R:
+                    u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
+                    ram.writeU8(nn, (u8) ((reg.SP & 0xFF00) >> 8));
+                    ram.writeU8(nn + 1, (u8)(reg.SP & 0x00FF));
+                    break;
+                case AM_R_A16:
+                    u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
+                    lookupRegU8(inst.op01) = ram.readU8(nn); // reg.A = ram.readU8(nn);
+                    break;
+                case AM_NONE:
+                default:
+                    std::cerr << "[ERROR]: Cannot find addr_modo for instruction IN_LD! : " << inst.addr << std::endl;
             }
+            break;
+        case IN_NOP:
+            break;
+        case IN_PUSH:
+            reg.SP--;
+            ram.writeU8(reg.SP--, (u8) ((lookupRegU16(inst.op01) & 0xFF00) >> 8));
+            ram.writeU8(reg.SP, (u8)(lookupRegU16(inst.op02) & 0x00FF));
+
     }
 
 }
