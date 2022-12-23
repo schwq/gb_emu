@@ -6,7 +6,6 @@
 #include "ram.hpp"
 #include "instruction.hpp"
 
-struct Registers;
 enum FLAGS;
 
 class CPU : public SYSTEM {
@@ -23,9 +22,12 @@ public:
     u16 &lookupRegU16(operand opt);
     void checkFlag(const char* flagSetup);
     void instructionExecute(instruction inst);
+    bool conditionalInstruction(const char* cc);
     instruction instructionOpcode(u8 opcode);
     template<typename T>
     register_type checkResgisterType(T opt);
+    void checkAffectedFlags(auto result, const char* affectflags = "----", u16 carry = 1);
+    int getFlag(FLAGS flag);
 
     Registers reg;
     RAM ram;

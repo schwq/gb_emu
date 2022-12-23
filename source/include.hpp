@@ -3,18 +3,13 @@
 
 #include <iostream>
 #include <fstream>
-#include <math.h>
+#include <sstream>
 #include <chrono>
 #include <thread>
 #include <string>
 #include <stdlib.h>
 #include <stdio.h>
 #include <SDL2/SDL.h>
-#include <map>
-
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 
 typedef uint8_t u8;
 typedef uint16_t u16;

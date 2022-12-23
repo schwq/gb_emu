@@ -43,23 +43,6 @@ enum mnemonic {
     IN_NONE
 };
 
-enum operand {
-    reg_a,
-    reg_b, 
-    reg_c,
-    reg_d,
-    reg_e,
-    reg_h,
-    reg_l,
-    reg_bc,
-    reg_hl,
-    reg_sp,
-    reg_de,
-    immediate_u8,
-    immediate_u16,
-    NONE
-};
-
 enum addr_mode {
     AM_IMP,
     AM_R_D16,
@@ -84,6 +67,24 @@ enum addr_mode {
     AM_R_A16,
     AM_NONE
 };
+
+enum operand {
+    reg_a,
+    reg_b, 
+    reg_c,
+    reg_d,
+    reg_e,
+    reg_h,
+    reg_l,
+    reg_bc,
+    reg_hl,
+    reg_sp,
+    reg_de,
+    immediate_u8,
+    immediate_u16,
+    NONE
+};
+
 
 enum register_type {
     U8REG,
