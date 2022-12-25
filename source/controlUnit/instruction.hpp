@@ -1,7 +1,7 @@
 #ifndef INSTRUCTION_HEADER
 #define INSTRUCTION_HEADER
 
-#include "include.hpp"
+#include "../include.hpp"
 
 enum FLAGS {
     ZERO,
@@ -40,6 +40,11 @@ enum mnemonic {
     IN_DI,
     IN_EI,
     IN_NOP,
+    IN_RRA,
+    IN_RLA,
+    IN_CB,
+    IN_RRCA,
+    IN_RLCA,
     IN_NONE
 };
 
@@ -80,6 +85,7 @@ enum operand {
     reg_hl,
     reg_sp,
     reg_de,
+    reg_af,
     immediate_u8,
     immediate_u16,
     NONE
@@ -94,11 +100,13 @@ enum register_type {
 
 struct instruction {
     mnemonic MNC;
+    addr_mode addr;
     operand op01;
     operand op02;
     const char* affectFlags;
     int cycles;
-    addr_mode addr;
+    u8 rst_opcode;
+    
 };
 
 #endif // INSTRUCTION_HEADER

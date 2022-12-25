@@ -1,7 +1,9 @@
 #include "cpu.hpp"
 
-void CPU::init()
+void CPU::init(RAM &ram)
 {
+    this->ram = ram;
+
     reg.PC = 0x0100 - 1;
     reg.A, reg.F = 0x01B0;
     reg.B, reg.C = 0x0013;
@@ -9,9 +11,20 @@ void CPU::init()
     reg.H, reg.L = 0x014D;
 }
 
+#ifdef DEBUG
+void CPU::debug(instruction inst) {
+    std::cout << "STATE: Reg_A: " << reg.A << " / Reg_B: " << reg.B << " / Reg_C: " << reg.C << " / Reg_D: " << reg.D << " / Reg_E: " << reg.E << " / Reg_F: " << reg.F << " / Reg_SP: " << reg.SP << " / Reg_H: " << reg.H << " / Reg_L: " << reg.L << "" << NEWLINE;
+    std::cout << "PC: " << reg.PC << NEWLINE;
+    std::cout << "FLAGS: Carry: " << getFlag(CARRY) << " / AddSub: " << getFlag(ADDSUB) << " / Half: " << getFlag(HALF) << " / Zero: " << getFlag(ZERO) << NEWLINE;
+    std::cout << "Instruction: " << inst.MNC << " / Addr_Mode: " << inst.addr << " / Op01: " << inst.op01 << " / Op02: " << inst.op02 << " / Flags: " << inst.affectFlags << " / RST_Opcode: " << inst.rst_opcode << " / Cycles: " << inst.cycles << NEWLINE;
+    std::cout << "______________________" << NEWLINE;
+} 
+#endif
+
 void CPU::execute() {
-    instruction inst = instructionOpcode(reg.PC);
+    instruction inst = instructionByOpcode(reg.PC);
     instructionExecute(inst);
+    debug(inst);
 }
 
 void CPU::setFlag(bool value, FLAGS flag)
@@ -51,42 +64,42 @@ int CPU::getFlag(FLAGS flag) {
     }
 }
 
-void CPU::checkAffectedFlags(auto result, const char* affectflags, u16 carry) {
-    if(affectflags == "----") return;
+void CPU::checkAffectedFlags(u16 result, const char* affectflags, u16 carry) {
+    if(affectflags == "----") return; 
     switch(affectflags[0]) {
-        case "-":
+        case '-':
             break;
-        case "Z":
+        case 'Z':
             if(result == 0) {
-                setFlag(1, ZERO)
+                setFlag(1, ZERO);
                 break;
             } else {
                 setFlag(0, ZERO);
                 break;
             }
-        case "1":
-            setFlag(1, ZERO)
+        case '1':
+            setFlag(1, ZERO);
             break;
-        case "0": 
+        case '0': 
             setFlag(0, ZERO);
             break;
     }
 
     switch(affectflags[1]) {
-        case "-":
+        case '-':
             break;
-        case "1":
+        case '1':
             setFlag(1, ADDSUB);
             break;
-        case "0":
+        case '0':
             setFlag(0, ADDSUB);
             break;
     }
 
     switch(affectflags[2]) {
-        case "-": 
+        case '-': 
             break;
-        case "H":
+        case 'H':
             if(BIT(carry, 3)) {
                 setFlag(1, HALF);
                 break;
@@ -94,18 +107,18 @@ void CPU::checkAffectedFlags(auto result, const char* affectflags, u16 carry) {
                 setFlag(0, HALF);
                 break;
             }
-        case "1":
+        case '1':
             setFlag(1, HALF);
             break;
-        case "0":
+        case '0':
             setFlag(0, HALF);
             break;
     }
 
     switch(affectflags[3]) {
-        case "-": 
+        case '-': 
             break;
-        case "H":
+        case 'H':
             if(BIT(carry, 7)) {
                 setFlag(1, CARRY);
                 break;
@@ -113,10 +126,10 @@ void CPU::checkAffectedFlags(auto result, const char* affectflags, u16 carry) {
                 setFlag(0, CARRY);
                 break;
             }
-        case "1":
+        case '1':
             setFlag(1, CARRY);
             break;
-        case "0":
+        case '0':
             setFlag(0, CARRY);
             break;
     }
@@ -182,15 +195,17 @@ u16 &CPU::lookupRegU16(operand opt)
         return reg.SP;
     case reg_de:
         return reg.DE;
+    case reg_af:
+        return reg.AF;
     case immediate_u16:
-        u16 addr = ram.readU16(u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++)));
+        u16 addr = ram.readU16(reg.PC++);
         return addr;
     default:
         std::cout << "[ERROR]: Cannot find U16 register_lookup: " << opt << NEWLINE;
     }
 }
 
-instruction CPU::instructionOpcode(u8 opcode)
+instruction CPU::instructionByOpcode(u8 opcode)
 {
     return instructions[opcode];
 }
@@ -264,6 +279,9 @@ void CPU::instructionExecute(instruction inst)
             break;
         case AM_HL_SPR:
             // config
+            u8 e = ram.readU8(reg.PC++);
+            u8 result = ~(reg.SP + e) + 1;
+            reg.HL = result;
             break;
         case AM_MR_D8:
             u8 nn = ram.readU8(reg.PC++);
@@ -278,6 +296,9 @@ void CPU::instructionExecute(instruction inst)
             u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
             lookupRegU8(inst.op01) = ram.readU8(nn); // reg.A = ram.readU8(nn);
             break;
+        case AM_R_D16:
+            lookupRegU16(inst.op01) = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
+            break; 
         case AM_NONE:
         default:
             std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_LD! : " << inst.addr << std::endl;
@@ -319,7 +340,7 @@ void CPU::instructionExecute(instruction inst)
                 result, carry = ram.readU8(reg.HL) - 1;
                 ram.writeU8(reg.HL, result);
                 break;
-
+            case AM_NONE:
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_DEC! : " << inst.addr << std::endl;
         }
@@ -349,6 +370,7 @@ void CPU::instructionExecute(instruction inst)
                 } else if (opcode == 0xE8) {
                     // config
                 } 
+            case AM_NONE:
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADD! : " << inst.addr << std::endl;
         }
@@ -364,6 +386,7 @@ void CPU::instructionExecute(instruction inst)
             case AM_R_D8:
                 result = reg.A |= ram.readU8(reg.PC++);
                 break;
+            case AM_NONE:
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_OR! : " << inst.addr << std::endl;
         }
@@ -380,6 +403,7 @@ void CPU::instructionExecute(instruction inst)
             case AM_R_D8:
                 result = (u16) (reg.A ^= ram.readU8(reg.PC++));
                 break;
+            
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_XOR! : " << inst.addr << std::endl;
         }
@@ -396,6 +420,7 @@ void CPU::instructionExecute(instruction inst)
             case AM_R_D8:
                 result = (u16) ( reg.A &= ram.readU8(reg.PC++));
                 break;
+            
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_AND! : " << inst.addr << std::endl;
         break;
@@ -434,6 +459,7 @@ void CPU::instructionExecute(instruction inst)
             case AM_R:
                 reg.PC = reg.HL;
                 break;
+            case AM_NONE:
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_JP! : " << inst.addr << std::endl;
         }
@@ -462,7 +488,6 @@ void CPU::instructionExecute(instruction inst)
                     reg.PC = nn;
                 }
                 break;
-
             default:
                 std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CALL! : " << inst.addr << std::endl;
         }
@@ -485,14 +510,10 @@ void CPU::instructionExecute(instruction inst)
 
     case IN_RST:
         {   
-            std::stringstream strValue;
-            strValue << inst.affectFlags;
-            u8 data;
-            strValue >> data;
             reg.SP--;
             ram.writeU8(reg.SP--, ((u8)(reg.PC & 0x00FF)));
             ram.writeU8(reg.SP, ((u8)((reg.PC & 0xFF00) >> 8)));
-            reg.PC = u8Tou16(data, 0x00);
+            reg.PC = u8Tou16(inst.rst_opcode, 0x00);
         }
         break;
 
