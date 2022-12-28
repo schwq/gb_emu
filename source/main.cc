@@ -1,15 +1,21 @@
 #include "include.hpp"
 #include "system.hpp"
 #include "cartridge.hpp"
-#include "memory.h"
+#include "controlUnit/cpu.hpp"
+#include "ram.hpp"
 
 // static SDL_Window* window = NULL;
 static int width = 1080;
 static int height = 540;
 static u32 pixels[160 * 144];
-static MEMORY mem;
+static RAM ram;
+static CARTRIDGE car(ram);
+static SYSTEM sys;
 
 int main(int argc, const char** argv) {
+    std::string error = "ERROR";
+
+    sys.LogMsg("ERROR ", error);
 
     std::cout << "[START]: Loading emulator..." << std::endl;
     /*
@@ -33,13 +39,13 @@ int main(int argc, const char** argv) {
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
         160, 144);
     */
+    if(car.loadCartridge("roms/pokemon.gb")) {
+        for(int x = 0; x < 0x0100; x++) {
+            std::cout << ram.readU8(x) << ", " << std::endl;
+        }
+    }
 
-   CARTRIDGE cart(mem);
-   if(cart.loadCartridge("roms/pokemon.gb")) {
-        std::cout << "LOADED" << std::endl;
-   } else {
-        std::cout << "NOT LOAD" << std::endl;
-   }
+    
 
     return 0;
 

@@ -1,7 +1,7 @@
 #include "cartridge.hpp"
 #include "system.hpp"
 
-CARTRIDGE::CARTRIDGE(MEMORY& mem) : memory(mem) {}
+CARTRIDGE::CARTRIDGE(RAM& ram) : ram(this->ram) {}
 CARTRIDGE::~CARTRIDGE() { free(data); }
 
 void CARTRIDGE::cartridgeHeader() {
@@ -66,8 +66,11 @@ bool CARTRIDGE::loadCartridge(const char* rom) {
     
     fclose(fp);
 
+    std::cout << "[INFO]: ROM transferred to buffer with success!" << std::endl;
+
+    std::cout << "Done" << NEWLINE;
+
     cartridgeHeader();
 
-    std::cout << "[INFO]: ROM transferred to buffer with success!" << std::endl;
     return true;
 }

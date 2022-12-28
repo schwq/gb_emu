@@ -3,7 +3,7 @@
 
 #include "include.hpp"
 #include "system.hpp"
-#include "memory.hpp"
+#include "ram.hpp"
 
 class CartridgeHeader {
 public:
@@ -28,7 +28,7 @@ public:
 class CARTRIDGE : public SYSTEM {
 public:
     
-    CARTRIDGE(MEMORY& mem);
+    CARTRIDGE(RAM& ram);
     ~CARTRIDGE();
     bool loadCartridge(const char* rom);
 
@@ -38,7 +38,7 @@ private:
     CartridgeHeader header;
     u32 CartridgeSize;
     u8 *data;
-    MEMORY& memory;
+    RAM& ram;
 };
 
 #endif // CARTRIDGE_HEADER
