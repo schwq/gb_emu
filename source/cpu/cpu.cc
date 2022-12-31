@@ -27,6 +27,10 @@ void CPU::execute() {
     debug(inst);
 }
 
+void CPU::cycle(int num) {
+    return;        
+}
+
 void CPU::setFlag(bool value, FLAGS flag)
 {
     switch (flag)
@@ -339,10 +343,104 @@ void CPU::bit_rra(bool carry) {
     setFlag((bool)bit0, CARRY);
 }
 
-void bit_set(u8& reg, int bit) {
+void CPU::bit_set(u8& reg, int bit) {
     u8 bitMask = 1 << bit;
     u8 value = reg | bitMask;
     reg = value;
+}
+
+void CPU::bit_rotateLeft(u16 reg, bool carry) {
+    
+    u8 bit7 = (ram.readU8(reg) & 0x80) >> 7;
+    u8 value = ram.readU8(reg) << 1;
+
+    if(carry) {
+        ram.writeU8(reg, (value + bit7));
+    } else {
+        ram.writeU8(reg, (value + getFlag(CARRY)));
+    }
+
+   setFlag(0, HALF);
+   setFlag(0, ADDSUB);
+   setFlag((ram.readU8(reg) == 0), ZERO);
+   setFlag((bool)bit7, CARRY);
+}
+
+void CPU::bit_rotateRight(u16 reg, bool carry) {
+    u8 bit0 = ram.readU8(reg) & 0x01;
+    u8 value = ram.readU8(reg) >> 1;
+
+    if(carry) {
+        ram.writeU8(reg, value + (bit0 << 7));
+    } else {
+        ram.writeU8(reg, value + (getFlag(CARRY) << 7));
+    }
+
+    setFlag(0, HALF);
+    setFlag(0, ADDSUB);
+    setFlag((ram.readU8(reg) == 0), ZERO);
+    setFlag((bool)bit0, CARRY);
+}
+
+void CPU::bit_swap(u16 reg) {
+    ram.writeU8(reg, (ram.readU8(reg) >> 4) | ((ram.readU8(reg) & 0xF) << 4));
+
+    setFlag(0, HALF);
+    setFlag(0, ADDSUB);
+    setFlag((ram.readU8(reg) == 0), ZERO);
+    setFlag(0, CARRY);
+    
+}
+ 
+void CPU::bit_test(u16 reg, int bit) {
+    u8 value = (ram.readU8(reg) >> bit) & 1;
+    
+    setFlag(0, HALF);
+    setFlag(0, ADDSUB);
+    setFlag((value == 0), ZERO);
+}
+
+void CPU::bit_reset(u16 reg, int bit) {
+    u8 bitMask = 1 << bit;
+    u8 value = ram.readU8(reg) & ~bitMask;
+    ram.writeU8(reg, value);
+}
+
+void CPU::bit_sla(u16 reg) {
+    u8 bit7 = (ram.readU8(reg) & 0x80) >> 7;
+    ram.writeU8(reg, (reg << 1));
+
+    setFlag(0, HALF);
+    setFlag(0, ADDSUB);
+    setFlag((ram.readU8(reg) == 0), ZERO);
+    setFlag((bool)bit7, CARRY);
+}
+
+void CPU::bit_srl(u16 reg) {
+    u8 bit0 = ram.readU8(reg) & 0x01;
+    ram.writeU8(reg, (reg >> 1));
+
+    setFlag(0, HALF);
+    setFlag(0, ADDSUB);
+    setFlag((ram.readU8(reg) == 0), ZERO);
+    setFlag((bool)bit0, CARRY);
+}
+
+void CPU::bit_sra(u16 reg) {
+    u8 bit0 = ram.readU8(reg) & 0x01;
+    u8 bit7 = ram.readU8(reg) & 0x80;
+    ram.writeU8(reg, (ram.readU8(reg) >> 1) + bit7);
+
+    setFlag(0, HALF);
+    setFlag(0, ADDSUB);
+    setFlag((ram.readU8(reg) == 0), ZERO);
+    setFlag((bool)bit0, CARRY);
+}
+
+void CPU::bit_set(u16 reg, int bit) {
+    u8 bitMask = 1 << bit;
+    u8 value = ram.readU8(reg) | bitMask;
+    ram.writeU8(reg, value);
 }
 
 void CPU::instructionExecute(instruction inst) {
@@ -750,7 +848,7 @@ void CPU::instructionExecute(instruction inst) {
     
     case IN_RLA:
         reg.A = ((reg.A << 1) | (reg.A >> (8 - 1)));
-        reg.A = set_bit(reg.A, getFlag(CARRY));
+        //reg.A = set_bit(reg.A, getFlag(CARRY));
         break;
 
     case IN_NOP:

@@ -2,7 +2,7 @@
 #define CARTRIDGE_HEADER
 
 #include "include.hpp"
-#include "system.hpp"
+
 #include "ram.hpp"
 
 class CartridgeHeader {
@@ -25,7 +25,7 @@ public:
     u16 globalChecksum;
 };
 
-class CARTRIDGE : public SYSTEM {
+class CARTRIDGE  {
 public:
     
     CARTRIDGE(RAM& ram);

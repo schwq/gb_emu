@@ -2,9 +2,9 @@
 #define RAM_HEADER
 
 #include "include.hpp"
-#include "system.hpp"
 
-class RAM : public SYSTEM{
+
+class RAM {
 public:
     u8 readU8(u16 addr);
     void writeU8(u16 addr, u8 data);

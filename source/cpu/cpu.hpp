@@ -49,7 +49,7 @@ struct Registers{
 
 };
 
-class CPU : public SYSTEM {
+class CPU  {
 public:
 
     void init(RAM &ram);
@@ -85,17 +85,16 @@ private:
     void bit_sra(u8& reg);
     void bit_set(u8& reg, int bit);
 
-    void bit_rotateLeft(u16& reg, bool carry);
-    void bit_rotateRight(u16& reg, bool carry);
-    void bit_swap(u16& reg);
-    void bit_test(u16& reg, int bit);
-    void bit_reset(u16& reg, int bit);
-    void bit_sla(u16& reg);
-    void bit_srl(u16& reg);
-    void bit_sra(u16& reg);
-    void bit_set(u16& reg, int bit);
+    void bit_rotateLeft(u16 reg, bool carry);
+    void bit_rotateRight(u16 reg, bool carry);
+    void bit_swap(u16 reg);
+    void bit_test(u16 reg, int bit);
+    void bit_reset(u16 reg, int bit);
+    void bit_sla(u16 reg);
+    void bit_srl(u16 reg);
+    void bit_sra(u16 reg);
+    void bit_set(u16 reg, int bit);
     
-
     instruction instructionByOpcode(const u8 opcode);
     template<typename T> register_type checkResgisterType(T opt);
 

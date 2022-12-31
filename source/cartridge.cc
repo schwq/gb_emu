@@ -1,5 +1,5 @@
 #include "cartridge.hpp"
-#include "system.hpp"
+
 
 CARTRIDGE::CARTRIDGE(RAM& ram) : ram(this->ram) {}
 CARTRIDGE::~CARTRIDGE() { free(data); }
