@@ -1,18 +1,18 @@
 #include "ram.hpp"
 
-u8 RAM::readU8(u16 addr) {
-    return memory[addr];
+u8 RAM::ReadU8Data(u16 Address) {
+    return EmulatorMemory[Address];
 }
 
-void RAM::writeU8(u16 addr, u8 data) {
-    memory[addr] = data;
+void RAM::WriteU8Data(u16 Address, u8 Data) {
+    EmulatorMemory[Address] = Data;
 }
 
-u16 RAM::readU16(u16 addr) {
-    return (u16) (memory[addr] << 8) | memory[addr + 1]; 
+u16 RAM::ReadU16Data(u16 Address) {
+    return (u16) (EmulatorMemory[Address] << 8) | EmulatorMemory[Address + 1]; 
 }
 
-void RAM::writeU16(u16 addr, u16 data) {
-    memory[addr] = (u8)((data & 0xFF00) >> 8);
-    memory[addr + 1] = (u8)(data & 0x00FF);
+void RAM::WriteU16Data(u16 Address, u16 Data) {
+    EmulatorMemory[Address] = (u8)((Data & 0xFF00) >> 8);
+    EmulatorMemory[Address + 1] = (u8)(Data & 0x00FF);
 }

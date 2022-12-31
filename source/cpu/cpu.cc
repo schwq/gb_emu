@@ -1,238 +1,231 @@
 #include "cpu.hpp"
 
-void CPU::init(RAM &ram)
+void CPU::InitializeCPU(RAM &ReferenceRAM)
 {
-    this->ram = ram;
+    this->MainRAM = ReferenceRAM;
 
-    reg.PC = 0x0100;
-    reg.AF = 0x01B0;
-    reg.BC = 0x0013;
-    reg.DE = 0x00D8;
-    reg.HL = 0x014D;
+    RegisterSet.PC = 0x0100;
+    RegisterSet.AF = 0x01B0;
+    RegisterSet.BC = 0x0013;
+    RegisterSet.DE = 0x00D8;
+    RegisterSet.HL = 0x014D;
 }
 
 #ifdef DEBUG
-void CPU::debug(instruction inst) {
-    std::cout << "STATE: Reg_A: " << reg.A << " / Reg_B: " << reg.B << " / Reg_C: " << reg.C << " / Reg_D: " << reg.D << " / Reg_E: " << reg.E << " / Reg_F: " << reg.F << " / Reg_SP: " << reg.SP << " / Reg_H: " << reg.H << " / Reg_L: " << reg.L << "" << NEWLINE;
-    std::cout << "PC: " << std::hex << reg.PC << NEWLINE;
-    std::cout << "FLAGS: Carry: " << getFlag(CARRY) << " / AddSub: " << getFlag(ADDSUB) << " / Half: " << getFlag(HALF) << " / Zero: " << getFlag(ZERO) << NEWLINE;
-    std::cout << "Instruction: " << inst.MNC << " / Addr_Mode: " << inst.addr << " / Op01: " << inst.op01 << " / Op02: " << inst.op02 << " / Flags: " << inst.affectFlags << " / RST_Opcode: " << inst.rst_opcode << " / Cycles: " << inst.cycles << NEWLINE;
+void CPU::DebugCPU(instruction InstructionExecuted) {
+    std::cout << "STATE: Reg_A: " << RegisterSet.A << " / Reg_B: " << RegisterSet.B << " / Reg_C: " << RegisterSet.C << " / Reg_D: " << RegisterSet.D << " / Reg_E: " << RegisterSet.E << " / Reg_F: " << RegisterSet.F << " / Reg_SP: " << RegisterSet.SP << " / Reg_H: " << RegisterSet.H << " / Reg_L: " << RegisterSet.L << "" << NEWLINE;
+    std::cout << "PC: " << std::hex << RegisterSet.PC << NEWLINE;
+    std::cout << "FLAGS: Carry: " << GetFlagInteger(CARRY) << " / AddSub: " << GetFlagInteger(ADDSUB) << " / Half: " << GetFlagInteger(HALF) << " / Zero: " << GetFlagInteger(ZERO) << NEWLINE;
+    std::cout << "Instruction: " << DebugLookUpMnemonic(InstructionExecuted.InstructionMnemonic) << " / Addr_Mode: " << DebugLookUpAddressMode(InstructionExecuted.InstructionAddressMode) << " / Op01: " << DebugLookUpOperand(InstructionExecuted.InstructionOperand01) << " / Op02: " << DebugLookUpOperand(InstructionExecuted.InstructionOperand02) << " / Flags: " << InstructionExecuted.InstructionAffectFlags << " / RST_Opcode: " << InstructionExecuted.InstructionRSTOpcode << " / Cycles: " << InstructionExecuted.InstructionCycles << NEWLINE;
     std::cout << "______________________" << NEWLINE;
 } 
 #endif
 
-void CPU::execute() {
-    instruction inst = instructionByOpcode(reg.PC);
-    instructionExecute(inst);
-    debug(inst);
+void CPU::ExecuteCPU() {
+    instruction Instruction = SearchInstructionByOpcode(RegisterSet.PC);
+    ExecuteInstruction(Instruction);
+    DebugCPU(Instruction);
 }
 
-void CPU::cycle(int num) {
+void CPU::CycleCPU(int Cycles) {
     return;        
 }
 
-void CPU::setFlag(bool value, FLAGS flag)
+void CPU::SetFlag(bool Value, FLAGS FlagToSetValue)
 {
-    switch (flag)
+    switch (FlagToSetValue)
     {
     case ZERO:
-        BIT_SET(reg.F, 7, (int)value);
+        BIT_SET(RegisterSet.F, 7, (int)Value);
         break;
     case ADDSUB:
-        BIT_SET(reg.F, 6, (int)value);
+        BIT_SET(RegisterSet.F, 6, (int)Value);
         break;
     case HALF:
-        BIT_SET(reg.F, 5, (int)value);
+        BIT_SET(RegisterSet.F, 5, (int)Value);
         break;
     case CARRY:
-        BIT_SET(reg.F, 4, (int)value);
+        BIT_SET(RegisterSet.F, 4, (int)Value);
         break;
     default:
         std::cerr << "[ERROR]: setFlag could not find case for FLAG set" << NEWLINE;
     }
 }
 
-int CPU::getFlag(FLAGS flag) {
-    switch(flag) {
+int CPU::GetFlagInteger(FLAGS FlagToGet) {
+    switch(FlagToGet) {
         case ZERO:
-            return BIT(reg.F, 7);
+            return BIT(RegisterSet.F, 7);
         case ADDSUB:
-            return BIT(reg.F, 6);
+            return BIT(RegisterSet.F, 6);
         case HALF:
-            return BIT(reg.F, 5);
+            return BIT(RegisterSet.F, 5);
         case CARRY:
-            return BIT(reg.F, 4);
+            return BIT(RegisterSet.F, 4);
         default:   
             std::cerr << "[ERROR]: Cannot find flag in function getFlag()!" << std::endl;
             return -1;
     }
 }
 
-void CPU::checkAffectedFlags(u16 result, const char* affectflags, u16 carry) {
-    if(affectflags == "----") return; 
-    switch(affectflags[0]) {
+void CPU::CheckAffectedFlags(u16 OperationResult, const char* AffectFlags, u16 Carry) {
+    if(AffectFlags == "----") return; 
+    switch(AffectFlags[0]) {
         case '-':
             break;
         case 'Z':
-            if(result == 0) {
-                setFlag(1, ZERO);
+            if(OperationResult == 0) {
+                SetFlag(1, ZERO);
                 break;
             } else {
-                setFlag(0, ZERO);
+                SetFlag(0, ZERO);
                 break;
             }
         case '1':
-            setFlag(1, ZERO);
+            SetFlag(1, ZERO);
             break;
         case '0': 
-            setFlag(0, ZERO);
+            SetFlag(0, ZERO);
             break;
     }
 
-    switch(affectflags[1]) {
+    switch(AffectFlags[1]) {
         case '-':
             break;
         case '1':
-            setFlag(1, ADDSUB);
+            SetFlag(1, ADDSUB);
             break;
         case '0':
-            setFlag(0, ADDSUB);
+            SetFlag(0, ADDSUB);
             break;
     }
 
-    switch(affectflags[2]) {
+    switch(AffectFlags[2]) {
         case '-': 
             break;
         case 'H':
-            if(BIT(carry, 3)) {
-                setFlag(1, HALF);
+            if(BIT(Carry, 3)) {
+                SetFlag(1, HALF);
                 break;
             } else {
-                setFlag(0, HALF);
+                SetFlag(0, HALF);
                 break;
             }
         case '1':
-            setFlag(1, HALF);
+            SetFlag(1, HALF);
             break;
         case '0':
-            setFlag(0, HALF);
+            SetFlag(0, HALF);
             break;
     }
 
-    switch(affectflags[3]) {
+    switch(AffectFlags[3]) {
         case '-': 
             break;
         case 'H':
-            if(BIT(carry, 7)) {
-                setFlag(1, CARRY);
+            if(BIT(Carry, 7)) {
+                SetFlag(1, CARRY);
                 break;
             } else {
-                setFlag(0, CARRY);
+                SetFlag(0, CARRY);
                 break;
             }
         case '1':
-            setFlag(1, CARRY);
+            SetFlag(1, CARRY);
             break;
         case '0':
-            setFlag(0, CARRY);
+            SetFlag(0, CARRY);
             break;
     }
 }
 
-bool CPU::conditionalInstruction(const char* cc) {
-    if(cc == "CC_NZ") {
-        return (getFlag(ADDSUB) == 1 && getFlag(ZERO) == 1) ? true : false;
+bool CPU::CheckConditionForInstruction(const char* Condition) {
+    if(Condition == "CC_NZ") {
+        return (GetFlagInteger(ADDSUB) == 1 && GetFlagInteger(ZERO) == 1) ? true : false;
     }
-    if(cc == "CC_Z") {
-        return getFlag(ZERO) == 1 ? true : false;
+    if(Condition == "CC_Z") {
+        return GetFlagInteger(ZERO) == 1 ? true : false;
     }
-    if(cc == "CC_NC") {
-        return (getFlag(ADDSUB) == 1 && getFlag(CARRY) == 1) ? true : false;
+    if(Condition == "CC_NC") {
+        return (GetFlagInteger(ADDSUB) == 1 && GetFlagInteger(CARRY) == 1) ? true : false;
     }
-    if(cc == "CC_C") {
-        return getFlag(CARRY) == 1 ? true : false;     
+    if(Condition == "CC_C") {
+        return GetFlagInteger(CARRY) == 1 ? true : false;     
     }
-    std::cerr << "[ERROR]: Cannot find conditional_instruction_cc pattern! : " << cc << std::endl;
+    std::cerr << "[ERROR]: Cannot find conditional_instruction_cc pattern! : " << Condition << std::endl;
     return NULL;
 }
 
-u8 set_bit(u8 number, int bit) {
-    if(bit <= 0) {
-        return number;
-    }
-    return (number | (1 << (bit - 1)));
-}
-
-u16 CPU::u8Tou16(u8 r1, u8 r2)
+u16 CPU::U8ToU16Number(u8 LowByte, u8 HighByte)
 {
-    return (r2 << 8) | r1;
+    return (HighByte << 8) | LowByte;
 }
 
-u8 &CPU::lookupRegU8(operand opt) {
-    switch (opt) {
+u8 &CPU::LookUpRegisterU8(operand OperandToLookUp) {
+    switch (OperandToLookUp) {
         case reg_a:
-            return reg.A;
+            return RegisterSet.A;
         case reg_b:
-            return reg.B;
+            return RegisterSet.B;
         case reg_c:
-            return reg.C;
+            return RegisterSet.C;
         case reg_d:
-            return reg.D;
+            return RegisterSet.D;
         case reg_e:
-            return reg.E;
+            return RegisterSet.E;
         case reg_h:
-            return reg.H;
+            return RegisterSet.H;
         case reg_l:
-            return reg.L;
+            return RegisterSet.L;
         case immediate_u8:
         {
-            u8 addr = ram.readU8(reg.PC++);
+            u8 addr = MainRAM.ReadU8Data(RegisterSet.PC++);
             return addr;
         }
         default:
         {
-            std::cout << "[ERROR]: Cannot find U8 register_lookup: " << opt << NEWLINE;
+            std::cout << "[ERROR]: Cannot find U8 register_lookup: " << OperandToLookUp << NEWLINE;
             u8 error = 0x00;
             return error;
         }
     }
 }
 
-u16 &CPU::lookupRegU16(operand opt)
+u16 &CPU::LookUpRegisterU16(operand OperandToLookUp)
 {
-    switch (opt)
+    switch (OperandToLookUp)
     {
     case reg_bc:
-        return reg.BC;
+        return RegisterSet.BC;
     case reg_hl:
-        return reg.HL;
+        return RegisterSet.HL;
     case reg_sp:
-        return reg.SP;
+        return RegisterSet.SP;
     case reg_de:
-        return reg.DE;
+        return RegisterSet.DE;
     case reg_af:
-        return reg.AF;
+        return RegisterSet.AF;
     case immediate_u16:
     {
-        u16 addr = ram.readU16(reg.PC++);
+        u16 addr = MainRAM.ReadU16Data(RegisterSet.PC++);
         return addr;
     }
     default:
-        std::cout << "[ERROR]: Cannot find U16 register_lookup: " << opt << NEWLINE;
+        std::cout << "[ERROR]: Cannot find U16 register_lookup: " << OperandToLookUp << NEWLINE;
     }
 }
 
-instruction CPU::instructionByOpcode(u8 opcode)
+instruction CPU::SearchInstructionByOpcode(u8 SearchOpcode)
 {
-    return instructions[opcode];
+    return InstructionSet[SearchOpcode];
 }
 
 template <typename T>
-register_type CPU::checkResgisterType(T opt)
+register_type CPU::CheckRegisterType(T RegisterToCheck)
 {
-    if (sizeof(opt) == sizeof(char)){
+    if (sizeof(RegisterToCheck) == sizeof(char)){
         return U8REG;
-    } else if(sizeof(opt) == sizeof(short)){
+    } else if(sizeof(RegisterToCheck) == sizeof(short)){
         return U16REG;
     } else {
         std::cerr << "[ERROR]: NONE_REG in checkRegisterType was been thown!" << std::endl;
@@ -240,436 +233,433 @@ register_type CPU::checkResgisterType(T opt)
     }
 }
 
-void CPU::bit_rotateLeft(u8& reg, bool carry) {
-    u8 bit7 = (reg & 0x80) >> 7;
-    u8 value = reg << 1;
+void CPU::BitOperationRL(u8& Register, bool Carry) {
+    u8 Bit7 = (Register & 0x80) >> 7;
+    u8 value = Register << 1;
 
-    if(carry) {
-        reg = value + bit7;
+    if(Carry) {
+        Register = value + Bit7;
     } else {
-        reg = value + getFlag(CARRY);
+        Register = value + GetFlagInteger(CARRY);
     }
 
-   setFlag(0, HALF);
-   setFlag(0, ADDSUB);
-   setFlag((reg == 0), ZERO);
-   setFlag((bool)bit7, CARRY);
+   SetFlag(0, HALF);
+   SetFlag(0, ADDSUB);
+   SetFlag((Register == 0), ZERO);
+   SetFlag((bool)Bit7, CARRY);
 }
 
-void CPU::bit_rotateRight(u8& reg, bool carry) {
-    u8 bit0 = reg & 0x01;
-    u8 value = reg >> 1;
+void CPU::BitOperationRR(u8& Register, bool Carry) {
+    u8 Bit0 = Register & 0x01;
+    u8 value = Register >> 1;
 
-    if(carry) {
-        reg = value + (bit0 << 7);
+    if(Carry) {
+        Register = value + (Bit0 << 7);
     } else {
-        reg = value + (getFlag(CARRY) << 7);
+        Register = value + (GetFlagInteger(CARRY) << 7);
     }
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((reg == 0), ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((Register == 0), ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_swap(u8& reg) {
-    reg = (reg >> 4) | ((reg & 0xF) << 4);
+void CPU::BitOperationSwap(u8& Register) {
+    Register = (Register >> 4) | ((Register & 0xF) << 4);
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((reg == 0), ZERO);
-    setFlag(0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((Register == 0), ZERO);
+    SetFlag(0, CARRY);
     
 }
  
-void CPU::bit_test(u8& reg, int bit) {
-    u8 value = (reg >> bit) & 1;
+void CPU::BitOperationTest(u8& Register, int Bit) {
+    u8 value = (Register >> Bit) & 1;
     
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((value == 0), ZERO);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((value == 0), ZERO);
 }
 
-void CPU::bit_reset(u8& reg, int bit) {
-    u8 bitMask = 1 << bit;
-    u8 value = reg & ~bitMask;
-    reg = value;
+void CPU::BitOperationReset(u8& Register, int Bit) {
+    u8 BitMask = 1 << Bit;
+    u8 value = Register & ~BitMask;
+    Register = value;
 }
 
-void CPU::bit_sla(u8& reg) {
-    u8 bit7 = (reg & 0x80) >> 7;
-    reg = reg << 1;
+void CPU::BitOperationSLA(u8& Register) {
+    u8 Bit7 = (Register & 0x80) >> 7;
+    Register = Register << 1;
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((reg == 0), ZERO);
-    setFlag((bool)bit7, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((Register == 0), ZERO);
+    SetFlag((bool)Bit7, CARRY);
 }
 
-void CPU::bit_srl(u8& reg) {
-    u8 bit0 = reg & 0x01;
-    reg = reg >> 1;
+void CPU::BitOperationSRL(u8& Register) {
+    u8 Bit0 = Register & 0x01;
+    Register = Register >> 1;
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((reg == 0), ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((Register == 0), ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_sra(u8& reg) {
-    u8 bit0 = reg & 0x01;
-    u8 bit7 = reg & 0x80;
-    reg = (reg >> 1) + bit7;
+void CPU::BitOperationSRA(u8& Register) {
+    u8 Bit0 = Register & 0x01;
+    u8 Bit7 = Register & 0x80;
+    Register = (Register >> 1) + Bit7;
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((reg == 0), ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((Register == 0), ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_rra(bool carry) {
-    u8 bit0 = reg.A & 0x01;
-    u8 value = reg.A >> 1;
+void CPU::BitOperationRRA(bool Carry) {
+    u8 Bit0 = RegisterSet.A & 0x01;
+    u8 value = RegisterSet.A >> 1;
 
-    if(carry) {
-        reg.A = value + (bit0 << 7);
+    if(Carry) {
+        RegisterSet.A = value + (Bit0 << 7);
     } else {
-        reg.A = value + (getFlag(CARRY) << 7);
+        RegisterSet.A = value + (GetFlagInteger(CARRY) << 7);
     }
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag(0, ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag(0, ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_set(u8& reg, int bit) {
-    u8 bitMask = 1 << bit;
-    u8 value = reg | bitMask;
-    reg = value;
+void CPU::BitOperationSET(u8& Register, int Bit) {
+    u8 BitMask = 1 << Bit;
+    u8 value = Register | BitMask;
+    Register = value;
 }
 
-void CPU::bit_rotateLeft(u16 reg, bool carry) {
+void CPU::BitOperationRL(u16 Register, bool Carry) {
     
-    u8 bit7 = (ram.readU8(reg) & 0x80) >> 7;
-    u8 value = ram.readU8(reg) << 1;
+    u8 Bit7 = (MainRAM.ReadU8Data(Register) & 0x80) >> 7;
+    u8 value = MainRAM.ReadU8Data(Register) << 1;
 
-    if(carry) {
-        ram.writeU8(reg, (value + bit7));
+    if(Carry) {
+        MainRAM.WriteU8Data(Register, (value + Bit7));
     } else {
-        ram.writeU8(reg, (value + getFlag(CARRY)));
+        MainRAM.WriteU8Data(Register, (value + GetFlagInteger(CARRY)));
     }
 
-   setFlag(0, HALF);
-   setFlag(0, ADDSUB);
-   setFlag((ram.readU8(reg) == 0), ZERO);
-   setFlag((bool)bit7, CARRY);
+   SetFlag(0, HALF);
+   SetFlag(0, ADDSUB);
+   SetFlag((MainRAM.ReadU8Data(Register) == 0), ZERO);
+   SetFlag((bool)Bit7, CARRY);
 }
 
-void CPU::bit_rotateRight(u16 reg, bool carry) {
-    u8 bit0 = ram.readU8(reg) & 0x01;
-    u8 value = ram.readU8(reg) >> 1;
+void CPU::BitOperationRR(u16 Register, bool Carry) {
+    u8 Bit0 = MainRAM.ReadU8Data(Register) & 0x01;
+    u8 value = MainRAM.ReadU8Data(Register) >> 1;
 
-    if(carry) {
-        ram.writeU8(reg, value + (bit0 << 7));
+    if(Carry) {
+        MainRAM.WriteU8Data(Register, value + (Bit0 << 7));
     } else {
-        ram.writeU8(reg, value + (getFlag(CARRY) << 7));
+        MainRAM.WriteU8Data(Register, value + (GetFlagInteger(CARRY) << 7));
     }
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((ram.readU8(reg) == 0), ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((MainRAM.ReadU8Data(Register) == 0), ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_swap(u16 reg) {
-    ram.writeU8(reg, (ram.readU8(reg) >> 4) | ((ram.readU8(reg) & 0xF) << 4));
+void CPU::BitOperationSwap(u16 Register) {
+    MainRAM.WriteU8Data(Register, (MainRAM.ReadU8Data(Register) >> 4) | ((MainRAM.ReadU8Data(Register) & 0xF) << 4));
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((ram.readU8(reg) == 0), ZERO);
-    setFlag(0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((MainRAM.ReadU8Data(Register) == 0), ZERO);
+    SetFlag(0, CARRY);
     
 }
  
-void CPU::bit_test(u16 reg, int bit) {
-    u8 value = (ram.readU8(reg) >> bit) & 1;
+void CPU::BitOperationTest(u16 Register, int Bit) {
+    u8 value = (MainRAM.ReadU8Data(Register) >> Bit) & 1;
     
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((value == 0), ZERO);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((value == 0), ZERO);
 }
 
-void CPU::bit_reset(u16 reg, int bit) {
-    u8 bitMask = 1 << bit;
-    u8 value = ram.readU8(reg) & ~bitMask;
-    ram.writeU8(reg, value);
+void CPU::BitOperationReset(u16 Register, int Bit) {
+    u8 BitMask = 1 << Bit;
+    u8 value = MainRAM.ReadU8Data(Register) & ~BitMask;
+    MainRAM.WriteU8Data(Register, value);
 }
 
-void CPU::bit_sla(u16 reg) {
-    u8 bit7 = (ram.readU8(reg) & 0x80) >> 7;
-    ram.writeU8(reg, (reg << 1));
+void CPU::BitOperationSLA(u16 Register) {
+    u8 Bit7 = (MainRAM.ReadU8Data(Register) & 0x80) >> 7;
+    MainRAM.WriteU8Data(Register, (Register << 1));
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((ram.readU8(reg) == 0), ZERO);
-    setFlag((bool)bit7, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((MainRAM.ReadU8Data(Register) == 0), ZERO);
+    SetFlag((bool)Bit7, CARRY);
 }
 
-void CPU::bit_srl(u16 reg) {
-    u8 bit0 = ram.readU8(reg) & 0x01;
-    ram.writeU8(reg, (reg >> 1));
+void CPU::BitOperationSRL(u16 Register) {
+    u8 Bit0 = MainRAM.ReadU8Data(Register) & 0x01;
+    MainRAM.WriteU8Data(Register, (Register >> 1));
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((ram.readU8(reg) == 0), ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((MainRAM.ReadU8Data(Register) == 0), ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_sra(u16 reg) {
-    u8 bit0 = ram.readU8(reg) & 0x01;
-    u8 bit7 = ram.readU8(reg) & 0x80;
-    ram.writeU8(reg, (ram.readU8(reg) >> 1) + bit7);
+void CPU::BitOperationSRA(u16 Register) {
+    u8 Bit0 = MainRAM.ReadU8Data(Register) & 0x01;
+    u8 Bit7 = MainRAM.ReadU8Data(Register) & 0x80;
+    MainRAM.WriteU8Data(Register, (MainRAM.ReadU8Data(Register) >> 1) + Bit7);
 
-    setFlag(0, HALF);
-    setFlag(0, ADDSUB);
-    setFlag((ram.readU8(reg) == 0), ZERO);
-    setFlag((bool)bit0, CARRY);
+    SetFlag(0, HALF);
+    SetFlag(0, ADDSUB);
+    SetFlag((MainRAM.ReadU8Data(Register) == 0), ZERO);
+    SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::bit_set(u16 reg, int bit) {
-    u8 bitMask = 1 << bit;
-    u8 value = ram.readU8(reg) | bitMask;
-    ram.writeU8(reg, value);
+void CPU::BitOperationSet(u16 Register, int Bit) {
+    u8 BitMask = 1 << Bit;
+    u8 value = MainRAM.ReadU8Data(Register) | BitMask;
+    MainRAM.WriteU8Data(Register, value);
 }
 
-void CPU::instructionExecute(instruction inst) {
-    u8 opcode = reg.PC;
-    u16 result;
-    u16 carry;
+void CPU::ExecuteInstruction(instruction InstructionToExecute) {
+    u8 Opcode = RegisterSet.PC;
+    u16 OperationResult;
+    u16 Carry;
 
-    switch (inst.MNC)
+    switch (InstructionToExecute.InstructionMnemonic)
     {
     case IN_LD:
         { 
-            switch (inst.addr) {
+            switch (InstructionToExecute.InstructionAddressMode) {
             case AM_MR_R:
-                if (inst.op01 == reg_c && inst.op02 == reg_a)
+                if (InstructionToExecute.InstructionOperand01 == reg_c && InstructionToExecute.InstructionOperand02 == reg_a)
                 { // 0xE2
-                    ram.writeU8(u8Tou16(reg.C, 0xFF), reg.A);
+                    MainRAM.WriteU8Data(U8ToU16Number(RegisterSet.C, 0xFF), RegisterSet.A);
                     break;
                 }
 
-                ram.writeU8(lookupRegU16(inst.op01), lookupRegU8(inst.op02));
+                MainRAM.WriteU8Data(LookUpRegisterU16(InstructionToExecute.InstructionOperand01), LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
                 
             case AM_R_R:
-                if (inst.op01 == reg_sp && inst.op02 == reg_hl)
+                if (InstructionToExecute.InstructionOperand01 == reg_sp && InstructionToExecute.InstructionOperand02 == reg_hl)
                 {
-                    reg.SP = reg.HL;
+                    RegisterSet.SP = RegisterSet.HL;
                     break;
                 }
-                lookupRegU8(inst.op01) = lookupRegU8(inst.op02);
+                LookUpRegisterU8(InstructionToExecute.InstructionOperand01) = LookUpRegisterU8(InstructionToExecute.InstructionOperand02);
                 break;
             case AM_R_MR:
-                if (inst.op01 == reg_a && inst.op02 == reg_c)
+                if (InstructionToExecute.InstructionOperand01 == reg_a && InstructionToExecute.InstructionOperand02 == reg_c)
                 { // 0xF2
-                    reg.A = ram.readU8(u8Tou16(reg.C, 0xFF));
+                    RegisterSet.A = MainRAM.ReadU8Data(U8ToU16Number(RegisterSet.C, 0xFF));
                     break;
                 }
-                lookupRegU8(inst.op01) = ram.readU8(lookupRegU16(inst.op02));
+                LookUpRegisterU8(InstructionToExecute.InstructionOperand01) = MainRAM.ReadU8Data(LookUpRegisterU16(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_R_HLI:
-                lookupRegU8(inst.op01) = ram.readU8(reg.HL++);
+                LookUpRegisterU8(InstructionToExecute.InstructionOperand01) = MainRAM.ReadU8Data(RegisterSet.HL++);
                 break;
             case AM_R_HLD:
-                lookupRegU8(inst.op01) = ram.readU8(reg.HL--);
+                LookUpRegisterU8(InstructionToExecute.InstructionOperand01) = MainRAM.ReadU8Data(RegisterSet.HL--);
                 break;
             case AM_HLI_R:
-                ram.writeU8(ram.readU8(reg.HL++), lookupRegU8(inst.op02));
+                MainRAM.WriteU8Data(MainRAM.ReadU8Data(RegisterSet.HL++), LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_HLD_R:
-                ram.writeU8(ram.readU8(reg.HL--), lookupRegU8(inst.op02));
+                MainRAM.WriteU8Data(MainRAM.ReadU8Data(RegisterSet.HL--), LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_HL_SPR:
                 {
                 // config
-                u8 e = ram.readU8(reg.PC++);
-                u8 result = ~(reg.SP + e) + 1;
-                reg.HL = result;
+                u8 SignedInteger = MainRAM.ReadU8Data(RegisterSet.PC++);
+                u8 result = ~(RegisterSet.SP + SignedInteger) + 1;
+                RegisterSet.HL = result;
                 break;
                 }
             case AM_MR_D8:
                 {
-                u8 nn = ram.readU8(reg.PC++);
-                ram.writeU8(lookupRegU16(inst.op01), nn);
+                u8 ResultHold = MainRAM.ReadU8Data(RegisterSet.PC++);
+                MainRAM.WriteU8Data(LookUpRegisterU16(InstructionToExecute.InstructionOperand01), ResultHold);
                 break;
                 }
             case AM_A16_R:
                 {
-                u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
-                ram.writeU8(nn, (u8)((reg.SP & 0xFF00) >> 8));
-                ram.writeU8(nn + 1, (u8)(reg.SP & 0x00FF));
+                u16 ResultHold = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), MainRAM.ReadU8Data(RegisterSet.PC++));
+                MainRAM.WriteU8Data(ResultHold, (u8)((RegisterSet.SP & 0xFF00) >> 8));
+                MainRAM.WriteU8Data(ResultHold + 1, (u8)(RegisterSet.SP & 0x00FF));
                 break;
                 }
             case AM_R_A16:
                 {
-                u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
-                lookupRegU8(inst.op01) = ram.readU8(nn); // reg.A = ram.readU8(nn);
+                u16 ResultHold = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), MainRAM.ReadU8Data(RegisterSet.PC++));
+                LookUpRegisterU8(InstructionToExecute.InstructionOperand01) = MainRAM.ReadU8Data(ResultHold); // reg.A = ram.ReadU8Data(nn);
                 break;
                 }
             case AM_R_D16:
-                lookupRegU16(inst.op01) = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
+                LookUpRegisterU16(InstructionToExecute.InstructionOperand01) = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), MainRAM.ReadU8Data(RegisterSet.PC++));
                 break; 
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_LD! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_LD! : " << InstructionToExecute.InstructionAddressMode << std::endl;
             }
             break;
         }
     case IN_LDH:
         {
-        if (inst.op01 == reg_a && inst.op02 == immediate_u8) { // 0xF0
-            
-            u8 n = ram.readU8(reg.PC++);
-            reg.A = ram.readU8(u8Tou16(n, 0xFF));
+        if (InstructionToExecute.InstructionOperand01 == reg_a && InstructionToExecute.InstructionOperand02 == immediate_u8) { // 0xF0
+            RegisterSet.A = MainRAM.ReadU8Data(U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), 0xFF));
             break;
             
         } else { // 0xE0
-            u8 n = ram.readU8(reg.PC++);
-            ram.writeU8(u8Tou16(n, 0xFF), reg.A);
+            MainRAM.WriteU8Data(U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), 0xFF), RegisterSet.A);
             break;
         }
         }
     case IN_DEC:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R:
-            if(checkResgisterType(inst.op01) == U8REG) {
-                result, carry = lookupRegU8(inst.op01) -= 1;
+            if(CheckRegisterType(InstructionToExecute.InstructionOperand01) == U8REG) {
+                OperationResult, Carry = LookUpRegisterU8(InstructionToExecute.InstructionOperand01) -= 1;
                 break;
             } else {
-                result, carry = lookupRegU16(inst.op01) -= 1;
+                OperationResult, Carry = LookUpRegisterU16(InstructionToExecute.InstructionOperand01) -= 1;
                 break;
             }
             
             case AM_MR:
-                result, carry = ram.readU8(reg.HL) - 1;
-                ram.writeU8(reg.HL, result);
+                OperationResult, Carry = MainRAM.ReadU8Data(RegisterSet.HL) - 1;
+                MainRAM.WriteU8Data(RegisterSet.HL, OperationResult);
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_DEC! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_DEC! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         
 
     case IN_ADD:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                if(opcode == 0x09 || opcode == 0x19 || opcode == 0x29 || opcode == 0x39) {
-                    carry = (u16) (lookupRegU16(inst.op01) += lookupRegU16(inst.op02));
-                    result = lookupRegU16(inst.op01);
+                if(Opcode == 0x09 || Opcode == 0x19 || Opcode == 0x29 || Opcode == 0x39) {
+                    Carry = (u16) (LookUpRegisterU16(InstructionToExecute.InstructionOperand01) += LookUpRegisterU16(InstructionToExecute.InstructionOperand02));
+                    OperationResult = LookUpRegisterU16(InstructionToExecute.InstructionOperand01);
                     break;
                 } else {
-                    carry = (u16) (lookupRegU8(inst.op01) += lookupRegU8(inst.op02));
-                    result = (u16) lookupRegU8(inst.op01);
+                    Carry = (u16) (LookUpRegisterU8(InstructionToExecute.InstructionOperand01) += LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
+                    OperationResult = (u16) LookUpRegisterU8(InstructionToExecute.InstructionOperand01);
                     break;
                 }
             case AM_R_MR: 
-                carry = reg.A += ram.readU8(reg.HL);
-                result = (u16) reg.A;
+                Carry = RegisterSet.A += MainRAM.ReadU8Data(RegisterSet.HL);
+                OperationResult = (u16) RegisterSet.A;
                 break;
             case AM_R_D8:
-                if(opcode == 0xC6) {
-                carry = reg.A += ram.readU8(reg.PC++);
-                result = (u16) reg.A;
+                if(Opcode == 0xC6) {
+                Carry = RegisterSet.A += MainRAM.ReadU8Data(RegisterSet.PC++);
+                OperationResult = (u16) RegisterSet.A;
                 break;
-                } else if (opcode == 0xE8) {
+                } else if (Opcode == 0xE8) {
                     // config
                 } 
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADD! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADD! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
 
     case IN_OR:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                result = reg.A |= lookupRegU8(inst.op02);
+                OperationResult = RegisterSet.A |= LookUpRegisterU8(InstructionToExecute.InstructionOperand02);
                 break;
             case AM_R_MR:
-                result = reg.A |= ram.readU8(reg.HL);
+                OperationResult = RegisterSet.A |= MainRAM.ReadU8Data(RegisterSet.HL);
                 break;
             case AM_R_D8:
-                result = reg.A |= ram.readU8(reg.PC++);
+                OperationResult = RegisterSet.A |= MainRAM.ReadU8Data(RegisterSet.PC++);
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_OR! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_OR! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         break;
 
     case IN_XOR:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                result = (u16) (reg.A ^= lookupRegU8(inst.op02));
+                OperationResult = (u16) (RegisterSet.A ^= LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_R_MR:
-                result = (u16) (reg.A ^= ram.readU8(reg.HL));
+                OperationResult = (u16) (RegisterSet.A ^= MainRAM.ReadU8Data(RegisterSet.HL));
                 break;
             case AM_R_D8:
-                result = (u16) (reg.A ^= ram.readU8(reg.PC++));
+                OperationResult = (u16) (RegisterSet.A ^= MainRAM.ReadU8Data(RegisterSet.PC++));
                 break;
             
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_XOR! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_XOR! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         break;
 
     case IN_AND:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                result = (u16) (reg.A &= lookupRegU8(inst.op02));
+                OperationResult = (u16) (RegisterSet.A &= LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_R_MR:
-                result = (u16) (reg.A &= ram.readU8(reg.HL));
+                OperationResult = (u16) (RegisterSet.A &= MainRAM.ReadU8Data(RegisterSet.HL));
                 break;
             case AM_R_D8:
-                result = (u16) ( reg.A &= ram.readU8(reg.PC++));
+                OperationResult = (u16) ( RegisterSet.A &= MainRAM.ReadU8Data(RegisterSet.PC++));
                 break;
             
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_AND! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_AND! : " << InstructionToExecute.InstructionAddressMode << std::endl;
     }
         break;
 
     case IN_JP:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_D16:
                 
-                if(opcode == 0xC3) {
-                    reg.PC = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
+                if(Opcode == 0xC3) {
+                    RegisterSet.PC = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), MainRAM.ReadU8Data(RegisterSet.PC++));
                     break;
                 } 
 
             case AM_R:
-                reg.PC = reg.HL;
+                RegisterSet.PC = RegisterSet.HL;
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_JP! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_JP! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         break;
 
     case IN_JR:
         {
-        if(opcode == 0x18) {
-            char ee = static_cast<char>(ram.readU8(reg.PC++));
-            reg.PC += (ee + 1);
+        if(Opcode == 0x18) {
+            char SignedInteger = static_cast<char>(MainRAM.ReadU8Data(RegisterSet.PC++));
+            RegisterSet.PC += (SignedInteger + 1);
             break;
         } else {
-            char ee = static_cast<char>(ram.readU8(reg.PC++));
-            if(conditionalInstruction(inst.affectFlags)) {
-                reg.PC += (ee + 1);
+            char SignedInteger = static_cast<char>(MainRAM.ReadU8Data(RegisterSet.PC++));
+            if(CheckConditionForInstruction(InstructionToExecute.InstructionAffectFlags)) {
+                RegisterSet.PC += (SignedInteger + 1);
             }
             break;
         }
@@ -677,156 +667,156 @@ void CPU::instructionExecute(instruction inst) {
         break;
 
     case IN_CALL:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_D16:
             {
-                if(opcode == 0xC4 || opcode == 0xCC || opcode == 0xD4 || opcode == 0xDC) {
-                    u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
-                    if(conditionalInstruction(inst.affectFlags)) {
-                            reg.SP--;
-                            ram.writeU8(reg.SP--, ((u8)(reg.PC & 0x00FF)));
-                            ram.writeU8(reg.SP, ((u8)((reg.PC & 0xFF00) >> 8)));
-                            reg.PC = nn;
-                            inst.cycles = 6;
+                if(Opcode == 0xC4 || Opcode == 0xCC || Opcode == 0xD4 || Opcode == 0xDC) {
+                    u16 ResultHold = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), MainRAM.ReadU8Data(RegisterSet.PC++));
+                    if(CheckConditionForInstruction(InstructionToExecute.InstructionAffectFlags)) {
+                            RegisterSet.SP--;
+                            MainRAM.WriteU8Data(RegisterSet.SP--, ((u8)(RegisterSet.PC & 0x00FF)));
+                            MainRAM.WriteU8Data(RegisterSet.SP, ((u8)((RegisterSet.PC & 0xFF00) >> 8)));
+                            RegisterSet.PC = ResultHold;
+                            InstructionToExecute.InstructionCycles = 6;
                             break;
                         } 
-                    reg.PC = nn;
+                    RegisterSet.PC = ResultHold;
                     break;
                 } else { // 0xCD
-                    u16 nn = u8Tou16(ram.readU8(reg.PC++), ram.readU8(reg.PC++));
-                    reg.SP--;
-                    ram.writeU8(reg.SP--, ((u8)(reg.PC & 0x00FF)));
-                    ram.writeU8(reg.SP, ((u8)((reg.PC & 0xFF00) >> 8)));
-                    reg.PC = nn;
+                    u16 ResultHold = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.PC++), MainRAM.ReadU8Data(RegisterSet.PC++));
+                    RegisterSet.SP--;
+                    MainRAM.WriteU8Data(RegisterSet.SP--, ((u8)(RegisterSet.PC & 0x00FF)));
+                    MainRAM.WriteU8Data(RegisterSet.SP, ((u8)((RegisterSet.PC & 0xFF00) >> 8)));
+                    RegisterSet.PC = ResultHold;
                 }
                 break;
             }
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CALL! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CALL! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
 
     case IN_RET:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_NONE:
-                reg.PC = u8Tou16(ram.readU8(reg.SP++), ram.readU8(reg.SP++));
+                RegisterSet.PC = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.SP++), MainRAM.ReadU8Data(RegisterSet.SP++));
                 break;
             case AM_IMP:
-                if(conditionalInstruction(inst.affectFlags)) {
-                    reg.PC = u8Tou16(ram.readU8(reg.SP++), ram.readU8(reg.SP++));
-                    inst.cycles = 5;
+                if(CheckConditionForInstruction(InstructionToExecute.InstructionAffectFlags)) {
+                    RegisterSet.PC = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.SP++), MainRAM.ReadU8Data(RegisterSet.SP++));
+                    InstructionToExecute.InstructionCycles = 5;
                 }
                 break;
             default: 
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_RET! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_RET! : " << InstructionToExecute.InstructionAddressMode << std::endl;
          }
          break;
 
     case IN_RST:
         {   
-            reg.SP--;
-            ram.writeU8(reg.SP--, ((u8)(reg.PC & 0x00FF)));
-            ram.writeU8(reg.SP, ((u8)((reg.PC & 0xFF00) >> 8)));
-            reg.PC = u8Tou16(inst.rst_opcode, 0x00);
+            RegisterSet.SP--;
+            MainRAM.WriteU8Data(RegisterSet.SP--, ((u8)(RegisterSet.PC & 0x00FF)));
+            MainRAM.WriteU8Data(RegisterSet.SP, ((u8)((RegisterSet.PC & 0xFF00) >> 8)));
+            RegisterSet.PC = U8ToU16Number(InstructionToExecute.InstructionRSTOpcode, 0x00);
         }
         break;
 
     case IN_CP:
-        switch(inst.addr) { 
+        switch(InstructionToExecute.InstructionAddressMode) { 
             case AM_R_R:
-                result, carry = reg.A - lookupRegU8(inst.op02);
+                OperationResult, Carry = RegisterSet.A - LookUpRegisterU8(InstructionToExecute.InstructionOperand02);
                 break;
             case AM_MR:
-                result, carry = reg.A - ram.readU8(reg.HL);
+                OperationResult, Carry = RegisterSet.A - MainRAM.ReadU8Data(RegisterSet.HL);
                 break;
             case AM_R_D8:
-                result, carry = reg.A - ram.readU8(reg.PC++);
+                OperationResult, Carry = RegisterSet.A - MainRAM.ReadU8Data(RegisterSet.PC++);
                 break;
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CP! : " << inst.addr << std::endl; 
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CP! : " << InstructionToExecute.InstructionAddressMode << std::endl; 
         }
         break;
 
     case IN_SUB:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                result, carry = reg.A -= lookupRegU8(inst.op02);
+                OperationResult, Carry = RegisterSet.A -= LookUpRegisterU8(InstructionToExecute.InstructionOperand02);
                 break;
             case AM_R_MR:
-                result, carry = reg.A -= ram.readU8(reg.HL);
+                OperationResult, Carry = RegisterSet.A -= MainRAM.ReadU8Data(RegisterSet.HL);
                 break;
             case AM_R_D8:
-                result, carry = reg.A -= ram.readU8(reg.PC++);
+                OperationResult, Carry = RegisterSet.A -= MainRAM.ReadU8Data(RegisterSet.PC++);
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_SUB! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_SUB! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         break;
 
     case IN_ADC:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                result, carry = reg.A += (getFlag(CARRY) + lookupRegU8(inst.op02));
+                OperationResult, Carry = RegisterSet.A += (GetFlagInteger(CARRY) + LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_R_MR:
-                result, carry = reg.A += (getFlag(CARRY) + ram.readU8(reg.HL));
+                OperationResult, Carry = RegisterSet.A += (GetFlagInteger(CARRY) + MainRAM.ReadU8Data(RegisterSet.HL));
                 break;
             case AM_R_D8:
-                result, carry = reg.A += (getFlag(CARRY) + ram.readU8(reg.PC++));
+                OperationResult, Carry = RegisterSet.A += (GetFlagInteger(CARRY) + MainRAM.ReadU8Data(RegisterSet.PC++));
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADC! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADC! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         break;
     
     case IN_SBC:
-        switch(inst.addr) {
+        switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
-                result, carry = reg.A -= (getFlag(CARRY) - lookupRegU8(inst.op02));
+                OperationResult, Carry = RegisterSet.A -= (GetFlagInteger(CARRY) - LookUpRegisterU8(InstructionToExecute.InstructionOperand02));
                 break;
             case AM_R_MR:
-                result, carry = reg.A -= (getFlag(CARRY) - ram.readU8(reg.HL));
+                OperationResult, Carry = RegisterSet.A -= (GetFlagInteger(CARRY) - MainRAM.ReadU8Data(RegisterSet.HL));
                 break;
             case AM_R_D8:
-                result, carry = reg.A -= (getFlag(CARRY) - ram.readU8(reg.PC++));
+                OperationResult, Carry = RegisterSet.A -= (GetFlagInteger(CARRY) - MainRAM.ReadU8Data(RegisterSet.PC++));
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_SBC! : " << inst.addr << std::endl;
+                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_SBC! : " << InstructionToExecute.InstructionAddressMode << std::endl;
         }
         break;
 
     case IN_POP:
-        lookupRegU16(inst.op01) = u8Tou16(ram.readU8(reg.SP++), ram.readU8(reg.SP++));
+        LookUpRegisterU16(InstructionToExecute.InstructionOperand01) = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.SP++), MainRAM.ReadU8Data(RegisterSet.SP++));
         break;
 
     case IN_CCF:
-        setFlag(false, ADDSUB);
-        setFlag(false, HALF);
-        if(BIT(reg.F, 4) == 1) {
-            setFlag(false, CARRY);
+        SetFlag(false, ADDSUB);
+        SetFlag(false, HALF);
+        if(BIT(RegisterSet.F, 4) == 1) {
+            SetFlag(false, CARRY);
         } else {
-            setFlag(true, CARRY);
+            SetFlag(true, CARRY);
         }
         break;
 
     case IN_PUSH:
-        reg.SP--;
-        ram.writeU8(reg.SP--, (u8)((lookupRegU16(inst.op01) & 0xFF00) >> 8));
-        ram.writeU8(reg.SP, (u8)(lookupRegU16(inst.op02) & 0x00FF));
+        RegisterSet.SP--;
+        MainRAM.WriteU8Data(RegisterSet.SP--, (u8)((LookUpRegisterU16(InstructionToExecute.InstructionOperand01) & 0xFF00) >> 8));
+        MainRAM.WriteU8Data(RegisterSet.SP, (u8)(LookUpRegisterU16(InstructionToExecute.InstructionOperand02) & 0x00FF));
         break;
 
     case IN_SCF:
-        setFlag(false, ADDSUB);
-        setFlag(false, HALF);
-        setFlag(true, CARRY);
+        SetFlag(false, ADDSUB);
+        SetFlag(false, HALF);
+        SetFlag(true, CARRY);
         break;
 
     case IN_CPL:
-        reg.A = ~reg.A;
-        setFlag(true, ADDSUB);
-        setFlag(true, HALF);
+        RegisterSet.A = ~RegisterSet.A;
+        SetFlag(true, ADDSUB);
+        SetFlag(true, HALF);
         break;
 
     case IN_DI:
@@ -834,28 +824,28 @@ void CPU::instructionExecute(instruction inst) {
         break;
     
     case IN_RETI:
-        reg.PC = u8Tou16(ram.readU8(reg.SP++), ram.readU8(reg.SP++));
+        RegisterSet.PC = U8ToU16Number(MainRAM.ReadU8Data(RegisterSet.SP++), MainRAM.ReadU8Data(RegisterSet.SP++));
         IME = 1;
         break;
 
     case IN_EI:
-        IME_scheduled = true;
+        IMEScheduled = true;
         break;
 
     case IN_RRA:
-        reg.A = ((reg.A >> 1) | (reg.A << (8 - 1)));
+        RegisterSet.A = ((RegisterSet.A >> 1) | (RegisterSet.A << (8 - 1)));
         break;
     
     case IN_RLA:
-        reg.A = ((reg.A << 1) | (reg.A >> (8 - 1)));
-        //reg.A = set_bit(reg.A, getFlag(CARRY));
+        RegisterSet.A = ((RegisterSet.A << 1) | (RegisterSet.A >> (8 - 1)));
+        BitOperationSET(RegisterSet.A, GetFlagInteger(CARRY));
         break;
 
     case IN_NOP:
         break;
 
     case IN_CB:
-        instructionCBexecute(inst, ram.readU8(reg.PC++));
+        CBPrefixInstructionExecute(MainRAM.ReadU8Data(RegisterSet.PC++));
         break;
     
     case IN_NONE:
@@ -864,1039 +854,1039 @@ void CPU::instructionExecute(instruction inst) {
 
     }
     
-    cycle(inst.cycles);
-    checkAffectedFlags(result, inst.affectFlags, carry);
-    reg.PC++;
+    CycleCPU(InstructionToExecute.InstructionCycles);
+    CheckAffectedFlags(OperationResult, InstructionToExecute.InstructionAffectFlags, Carry);
+    RegisterSet.PC++;
 }               
 
-void CPU::instructionCBexecute(const instruction inst, const u8 immediate) {
-    switch(immediate) {
+void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
+    switch(CBInstructionToExecute) {
         case 0x37:  // Swap upper and lower nibbles of register A, flags updated
-            bit_swap(reg.A);
-            cycle(8);
+            BitOperationSwap(RegisterSet.A);
+            CycleCPU(8);
             break;
         case 0x30:  // Swap upper and lower nibbles of register B, flags updated
-            bit_swap(reg.B);
-            cycle(8);
+            BitOperationSwap(RegisterSet.B);
+            CycleCPU(8);
             break;
         case 0x31:  // Swap upper and lower nibbles of register C, flags updated
-            bit_swap(reg.C);
-            cycle(8);
+            BitOperationSwap(RegisterSet.C);
+            CycleCPU(8);
             break;
         case 0x32:  // Swap upper and lower nibbles of register D, flags updated
-            bit_swap(reg.D);
-            cycle(8);
+            BitOperationSwap(RegisterSet.D);
+            CycleCPU(8);
             break;
         case 0x33:  // Swap upper and lower nibbles of register E, flags updated
-            bit_swap(reg.E);
-            cycle(8);
+            BitOperationSwap(RegisterSet.E);
+            CycleCPU(8);
             break;
         case 0x34:  // Swap upper and lower nibbles of register H, flags updated
-            bit_swap(reg.H);
-            cycle(8);
+            BitOperationSwap(RegisterSet.H);
+            CycleCPU(8);
             break;
         case 0x35:  // Swap upper and lower nibbles of register L, flags updated
-            bit_swap(reg.L);
-            cycle(8);
+            BitOperationSwap(RegisterSet.L);
+            CycleCPU(8);
             break;
         case 0x36:  // Swap upper and lower nibbles of byte at (HL), flags updated
-            bit_swap(reg.HL);
-            cycle(16);
-            break;
-        case 0x07:  // Rotate contents of A register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.A, true); // Carry = true (Rotate left with carry RLC A)
-            cycle(8);
-            break;
-        case 0x00:  // Rotate contents of B register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.B, true); // Carry = true (Rotate left with carry RLC B)
-            cycle(8);
-            break;
-        case 0x01:  // Rotate contents of C register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.C, true); // Carry = true (Rotate left with carry RLC C)
-            cycle(8);
-            break;
-        case 0x02:  // Rotate contents of D register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.D, true); // Carry = true (Rotate left with carry RLC D)
-            cycle(8);
-            break;
-        case 0x03:  // Rotate contents of E register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.E, true); // Carry = true (Rotate left with carry RLC E)
-            cycle(8);
-            break;
-        case 0x04:  // Rotate contents of H register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.H, true); // Carry = true (Rotate left with carry RLC H)
-            cycle(8);
-            break;
-        case 0x05:  // Rotate contents of L register left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.L, true); // Carry = true (Rotate left with carry RLC L)
-            cycle(8);
-            break;
-        case 0x06:  // Rotate contents of byte at (HL) left and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.HL, true); // Carry = true (Rotate left with carry RLC L)
-            cycle(16);
-            break;
-        case 0x17:  // Rotate contents of A register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.A, false); // Carry = false (Rotate left RL A)
-            cycle(8);
-            break;
-        case 0x10:  // Rotate contents of B register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.B, false); // Carry = false (Rotate left with carry RL B)
-            cycle(8);
-            break;
-        case 0x11:  // Rotate contents of C register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.C, false); // Carry = false (Rotate left with carry RL C)
-            cycle(8);
-            break;
-        case 0x12:  // Rotate contents of D register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.D, false); // Carry = false (Rotate left with carry RL D)
-            cycle(8);
-            break;
-        case 0x13:  // Rotate contents of E register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.E, false); // Carry = false (Rotate left with carry RL E)
-            cycle(8);
-            break;
-        case 0x14:  // Rotate contents of H register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.H, false); // Carry = false (Rotate left with carry RL H)
-            cycle(8);
-            break;
-        case 0x15:  // Rotate contents of L register left through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.L, false); // Carry = false (Rotate left with carry RL L)
-            cycle(8);
-            break;
-        case 0x16:  // Rotate contents of byte at (HL) lef through carry flag and store bit 7 in CF, flags updated
-            bit_rotateLeft(reg.HL, false); // Carry = false (Rotate left with carry RL L)
-            cycle(16);
-            break;
-        case 0x0f:  // Rotate contents of A register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.A, true); // Carry = true (Rotate right with carry RRC A)
-            cycle(8);
-            break;
-        case 0x08:  // Rotate contents of B register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.B, true); // Carry = true (Rotate right with carry RRC B)
-            cycle(8);
-            break;
-        case 0x09:  // Rotate contents of C register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.C, true); // Carry = true (Rotate right with carry RRC C)
-            cycle(8);
-            break;
-        case 0x0a:  // Rotate contents of D register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.D, true); // Carry = true (Rotate right with carry RRC D)
-            cycle(8);
-            break;
-        case 0x0b:  // Rotate contents of E register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.E, true); // Carry = true (Rotate right with carry RRC E)
-            cycle(8);
-            break;
-        case 0x0c:  // Rotate contents of H register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.H, true); // Carry = true (Rotate right with carry RRC H)
-            cycle(8);
-            break;
-        case 0x0d:  // Rotate contents of L register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.L, true); // Carry = true (Rotate right with carry RRC L)
-            cycle(8);
-            break;
-        case 0x0e:  // Rotate contents of byte at (HL) right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.HL, true); // Carry = true (Rotate right with carry RRC (HL))
-            cycle(16);
-            break;
-        case 0x1f:  // Rotate contents of A register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.A, false); // Carry = false (Rotate right RR A)
-            cycle(8);
-            break;
-        case 0x18:  // Rotate contents of B register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.B, false); // Carry = false (Rotate right with carry RR B)
-            cycle(8);
-            break;
-        case 0x19:  // Rotate contents of C register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.C, false); // Carry = false (Rotate right with carry RR C)
-            cycle(8);
-            break;
-        case 0x1a:  // Rotate contents of D register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.D, false); // Carry = false (Rotate right with carry RR D)
-            cycle(8);
-            break;
-        case 0x1b:  // Rotate contents of E register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.E, false); // Carry = false (Rotate right with carry RR E)
-            cycle(8);
-            break;
-        case 0x1c:  // Rotate contents of H register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.H, false); // Carry = false (Rotate right with carry RR H)
-            cycle(8);
-            break;
-        case 0x1d:  // Rotate contents of L register right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.L, false); // Carry = false (Rotate right with carry RR L)
-            cycle(8);
-            break;
-        case 0x1e:  // Rotate contents of byte at (HL) right and store bit 0 in CF, flags updated
-            bit_rotateRight(reg.HL, false); // Carry = false (Rotate right with carry RR (HL))
-            cycle(16);
-            break;
-        case 0x27:  // Shift contents of register A left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.A);
-            cycle(8);
-            break;
-        case 0x20:  // Shift contents of register B left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.B);
-            cycle(8);
-            break;
-        case 0x21:  // Shift contents of register C left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.C);
-            cycle(8);
-            break;
-        case 0x22:  // Shift contents of register D left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.D);
-            cycle(8);
-            break;
-        case 0x23:  // Shift contents of register E left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.E);
-            cycle(8);
-            break;
-        case 0x24:  // Shift contents of register H left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.H);
-            cycle(8);
-            break;
-        case 0x25:  // Shift contents of register L left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.L);
-            cycle(8);
-            break;
-        case 0x26:  // Shift contents of byte at (HL) left and store bit 7 in CF, bit0 = 0, flags updated
-            bit_sla(reg.HL);
-            cycle(16);
-            break;
-        case 0x2f:  // Shift contents of register A right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.A);
-            cycle(8);
-            break;
-        case 0x28:  // Shift contents of register B right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.B);
-            cycle(8);
-            break;
-        case 0x29:  // Shift contents of register C right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.C);
-            cycle(8);
-            break;
-        case 0x2a:  // Shift contents of register D right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.D);
-            cycle(8);
-            break;
-        case 0x2b:  // Shift contents of register E right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.E);
-            cycle(8);
-            break;
-        case 0x2c:  // Shift contents of register H right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.H);
-            cycle(8);
-            break;
-        case 0x2d:  // Shift contents of register L right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.L);
-            cycle(8);
-            break;
-        case 0x2e:  // Shift contents byte at (HL) right and store bit 0 in CF, bit7 unchanged, flags updated
-            bit_sra(reg.HL);
-            cycle(16);
-            break;
-        case 0x3f:  // Shift contents of register A right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.A);
-            cycle(8);
-            break;
-        case 0x38:  // Shift contents of register B right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.B);
-            cycle(8);
-            break;
-        case 0x39:  // Shift contents of register C right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.C);
-            cycle(8);
-            break;
-        case 0x3a:  // Shift contents of register D right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.D);
-            cycle(8);
-            break;
-        case 0x3b:  // Shift contents of register E right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.E);
-            cycle(8);
-            break;
-        case 0x3c:  // Shift contents of register H right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.H);
-            cycle(8);
-            break;
-        case 0x3d:  // Shift contents of register L right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.L);
-            cycle(8);
-            break;
-        case 0x3e:  // Shift contents byte at (HL) right and store bit 0 in CF, bit7 = 0, flags updated
-            bit_srl(reg.HL);
-            cycle(16);
-            break;
-        case 0x47:  // Test bit 0 in register A and set flags accordingly
-            bit_test(reg.A, 0);
-            cycle(8);
-            break;
-        case 0x40:  // Test bit 0 in register B and set flags accordingly
-            bit_test(reg.B, 0);
-            cycle(8);
-            break;
-        case 0x41:  // Test bit 0 in register C and set flags accordingly
-            bit_test(reg.C, 0);
-            cycle(8);
-            break;
-        case 0x42:  // Test bit 0 in register D and set flags accordingly
-            bit_test(reg.D, 0);
-            cycle(8);
-            break;
-        case 0x43:  // Test bit 0 in register E and set flags accordingly
-            bit_test(reg.E, 0);
-            cycle(8);
-            break;
-        case 0x44:  // Test bit 0 in register H and set flags accordingly
-            bit_test(reg.H, 0);
-            cycle(8);
-            break;
-        case 0x45:  // Test bit 0 in register L and set flags accordingly
-            bit_test(reg.L, 0);
-            cycle(8);
-            break;
-        case 0x46:  // Test bit 0 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 0);
-            cycle(16);
-            break;
-        case 0x4f:  // Test bit 1 in register A and set flags accordingly
-            bit_test(reg.A, 1);
-            cycle(8);
-            break;
-        case 0x48:  // Test bit 1 in register B and set flags accordingly
-            bit_test(reg.B, 1);
-            cycle(8);
-            break;
-        case 0x49:  // Test bit 1 in register C and set flags accordingly
-            bit_test(reg.C, 1);
-            cycle(8);
-            break;
-        case 0x4a:  // Test bit 1 in register D and set flags accordingly
-            bit_test(reg.D, 1);
-            cycle(8);
-            break;
-        case 0x4b:  // Test bit 1 in register E and set flags accordingly
-            bit_test(reg.E, 1);
-            cycle(8);
-            break;
-        case 0x4c:  // Test bit 1 in register H and set flags accordingly
-            bit_test(reg.H, 1);
-            cycle(8);
-            break;
-        case 0x4d:  // Test bit 1 in register L and set flags accordingly
-            bit_test(reg.L, 1);
-            cycle(8);
-            break;
-        case 0x4e:  // Test bit 1 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 1);
-            cycle(16);
-            break;
-        case 0x57:  // Test bit 2 in register A and set flags accordingly
-            bit_test(reg.A, 2);
-            cycle(8);
-            break;
-        case 0x50:  // Test bit 2 in register B and set flags accordingly
-            bit_test(reg.B, 2);
-            cycle(8);
-            break;
-        case 0x51:  // Test bit 2 in register C and set flags accordingly
-            bit_test(reg.C, 2);
-            cycle(8);
-            break;
-        case 0x52:  // Test bit 2 in register D and set flags accordingly
-            bit_test(reg.D, 2);
-            cycle(8);
-            break;
-        case 0x53:  // Test bit 2 in register E and set flags accordingly
-            bit_test(reg.E, 2);
-            cycle(8);
-            break;
-        case 0x54:  // Test bit 2 in register H and set flags accordingly
-            bit_test(reg.H, 2);
-            cycle(8);
-            break;
-        case 0x55:  // Test bit 2 in register L and set flags accordingly
-            bit_test(reg.L, 2);
-            cycle(8);
-            break;
-        case 0x56:  // Test bit 2 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 2);
-            cycle(16);
-            break;
-        case 0x5f:  // Test bit 3 in register A and set flags accordingly
-            bit_test(reg.A, 3);
-            cycle(8);
-            break;
-        case 0x58:  // Test bit 3 in register B and set flags accordingly
-            bit_test(reg.B, 3);
-            cycle(8);
-            break;
-        case 0x59:  // Test bit 3 in register C and set flags accordingly
-            bit_test(reg.C, 3);
-            cycle(8);
-            break;
-        case 0x5a:  // Test bit 3 in register D and set flags accordingly
-            bit_test(reg.E, 3);
-            cycle(8);
-            break;
-        case 0x5b:  // Test bit 3 in register E and set flags accordingly
-            bit_test(reg.D, 3);
-            cycle(8);
-            break;
-        case 0x5c:  // Test bit 3 in register H and set flags accordingly
-            bit_test(reg.H, 3);
-            cycle(8);
-            break;
-        case 0x5d:  // Test bit 3 in register L and set flags accordingly
-            bit_test(reg.L, 3);
-            cycle(8);
-            break;
-        case 0x5e:  // Test bit 3 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 3);
-            cycle(16);
-            break;
-        case 0x67:  // Test bit 4 in register A and set flags accordingly
-            bit_test(reg.A, 4);
-            cycle(8);
-            break;
-        case 0x60:  // Test bit 4 in register B and set flags accordingly
-            bit_test(reg.B, 4);
-            cycle(8);
-            break;
-        case 0x61:  // Test bit 4 in register C and set flags accordingly
-            bit_test(reg.C, 4);
-            cycle(8);
-            break;
-        case 0x62:  // Test bit 4 in register D and set flags accordingly
-            bit_test(reg.D, 4);
-            cycle(8);
-            break;
-        case 0x63:  // Test bit 4 in register E and set flags accordingly
-            bit_test(reg.E, 4);
-            cycle(8);
-            break;
-        case 0x64:  // Test bit 4 in register H and set flags accordingly
-            bit_test(reg.H, 4);
-            cycle(8);
-            break;
-        case 0x65:  // Test bit 4 in register L and set flags accordingly
-            bit_test(reg.L, 4);
-            cycle(8);
-            break;
-        case 0x66:  // Test bit 4 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 4);
-            cycle(16);
-            break;
-        case 0x6f:  // Test bit 5 in register A and set flags accordingly
-            bit_test(reg.A, 5);
-            cycle(8);
-            break;
-        case 0x68:  // Test bit 5 in register B and set flags accordingly
-            bit_test(reg.B, 5);
-            cycle(8);
-            break;
-        case 0x69:  // Test bit 5 in register C and set flags accordingly
-            bit_test(reg.C, 5);
-            cycle(8);
-            break;
-        case 0x6a:  // Test bit 5 in register D and set flags accordingly
-            bit_test(reg.D, 5);
-            cycle(8);
-            break;
-        case 0x6b:  // Test bit 5 in register E and set flags accordingly
-            bit_test(reg.E, 5);
-            cycle(8);
-            break;
-        case 0x6c:  // Test bit 5 in register H and set flags accordingly
-            bit_test(reg.H, 5);
-            cycle(8);
-            break;
-        case 0x6d:  // Test bit 5 in register L and set flags accordingly
-            bit_test(reg.L, 5);
-            cycle(8);
-            break;
-        case 0x6e:  // Test bit 5 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 5);
-            cycle(16);
-            break;
-        case 0x77:  // Test bit 6 in register A and set flags accordingly
-            bit_test(reg.A, 6);
-            cycle(8);
-            break;
-        case 0x70:  // Test bit 6 in register B and set flags accordingly
-            bit_test(reg.B, 6);
-            cycle(8);
-            break;
-        case 0x71:  // Test bit 6 in register C and set flags accordingly
-            bit_test(reg.C, 6);
-            cycle(8);
-            break;
-        case 0x72:  // Test bit 6 in register D and set flags accordingly
-            bit_test(reg.D, 6);
-            cycle(8);
-            break;
-        case 0x73:  // Test bit 6 in register E and set flags accordingly
-            bit_test(reg.E, 6);
-            cycle(8);
-            break;
-        case 0x74:  // Test bit 6 in register H and set flags accordingly
-            bit_test(reg.H, 6);
-            cycle(8);
-            break;
-        case 0x75:  // Test bit 6 in register L and set flags accordingly
-            bit_test(reg.L, 6);
-            cycle(8);
-            break;
-        case 0x76:  // Test bit 6 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 6);
-            cycle(16);
-            break;
-        case 0x7f:  // Test bit 7 in register A and set flags accordingly
-            bit_test(reg.A, 7);
-            cycle(8);
-            break;
-        case 0x78:  // Test bit 7 in register B and set flags accordingly
-            bit_test(reg.B, 7);
-            cycle(8);
-            break;
-        case 0x79:  // Test bit 7 in register C and set flags accordingly
-            bit_test(reg.C, 7);
-            cycle(8);
-            break;
-        case 0x7a:  // Test bit 7 in register D and set flags accordingly
-            bit_test(reg.D, 7);
-            cycle(8);
-            break;
-        case 0x7b:  // Test bit 7 in register E and set flags accordingly
-            bit_test(reg.E, 7);
-            cycle(8);
-            break;
-        case 0x7c:  // Test bit 7 in register H and set flags accordingly
-            bit_test(reg.H, 7);
-            cycle(8);
-            break;
-        case 0x7d:  // Test bit 7 in register L and set flags accordingly
-            bit_test(reg.L, 7);
-            cycle(8);
-            break;
-        case 0x7e:  // Test bit 7 in byte at (HL) and set flags accordingly
-            bit_test(reg.HL, 7);
-            cycle(16);
-            break;
-        case 0xc7:  // Set bit 0 in register A, flags not affected
-            bit_set(reg.A, 0);
-            cycle(8);
-            break;
-        case 0xc0:  // Set bit 0 in register B, flags not affected
-            bit_set(reg.B, 0);
-            cycle(8);
-            break;
-        case 0xc1:  // Set bit 0 in register C, flags not affected
-            bit_set(reg.C, 0);
-            cycle(8);
-            break;
-        case 0xc2:  // Set bit 0 in register D, flags not affectedy
-            bit_set(reg.D, 0);
-            cycle(8);
-            break;
-        case 0xc3:  // Set bit 0 in register E, flags not affected
-            bit_set(reg.E, 0);
-            cycle(8);
-            break;
-        case 0xc4:  // Set bit 0 in register H, flags not affected
-            bit_set(reg.H, 0);
-            cycle(8);
-            break;
-        case 0xc5:  // Set bit 0 in register L, flags not affected
-            bit_set(reg.L, 0);
-            cycle(8);
-            break;
-        case 0xc6:  // Set bit 0 in byte at (HL), flags not affected
-            bit_set(reg.HL, 0);
-            cycle(16);
-            break;
-        case 0xcf:  // Set bit 1 in register A, flags not affected
-            bit_set(reg.A, 1);
-            cycle(8);
-            break;
-        case 0xc8:  // Set bit 1 in register B, flags not affected
-            bit_set(reg.B, 1);
-            cycle(8);
-            break;
-        case 0xc9:  // Set bit 1 in register C, flags not affected
-            bit_set(reg.C, 1);
-            cycle(8);
-            break;
-        case 0xca:  // Set bit 1 in register D, flags not affectedy
-            bit_set(reg.D, 1);
-            cycle(8);
-            break;
-        case 0xcb:  // Set bit 1 in register E, flags not affected
-            bit_set(reg.E, 1);
-            cycle(8);
-            break;
-        case 0xcc:  // Set bit 1 in register H, flags not affected
-            bit_set(reg.H, 1);
-            cycle(8);
-            break;
-        case 0xcd:  // Set bit 1 in register L, flags not affected
-            bit_set(reg.L, 1);
-            cycle(8);
-            break;
-        case 0xce:  // Set bit 1 in byte at (HL), flags not affected
-            bit_set(reg.HL, 1);
-            cycle(16);
-            break;
-        case 0xd7:  // Set bit 2 in register A, flags not affected
-            bit_set(reg.A, 2);
-            cycle(8);
-            break;
-        case 0xd0:  // Set bit 2 in register B, flags not affected
-            bit_set(reg.B, 2);
-            cycle(8);
-            break;
-        case 0xd1:  // Set bit 2 in register C, flags not affected
-            bit_set(reg.C, 2);
-            cycle(8);
-            break;
-        case 0xd2:  // Set bit 2 in register D, flags not affectedy
-            bit_set(reg.D, 2);
-            cycle(8);
-            break;
-        case 0xd3:  // Set bit 2 in register E, flags not affected
-            bit_set(reg.E, 2);
-            cycle(8);
-            break;
-        case 0xd4:  // Set bit 2 in register H, flags not affected
-            bit_set(reg.H, 2);
-            cycle(8);
-            break;
-        case 0xd5:  // Set bit 2 in register L, flags not affected
-            bit_set(reg.L, 2);
-            cycle(8);
-            break;
-        case 0xd6:  // Set bit 2 in byte at (HL), flags not affected
-            bit_set(reg.HL, 2);
-            cycle(16);
-            break;
-        case 0xdf:  // Set bit 3 in register A, flags not affected
-            bit_set(reg.A, 3);
-            cycle(8);
-            break;
-        case 0xd8:  // Set bit 3 in register B, flags not affected
-            bit_set(reg.B, 3);
-            cycle(8);
-            break;
-        case 0xd9:  // Set bit 3 in register C, flags not affected
-            bit_set(reg.C, 3);
-            cycle(8);
-            break;
-        case 0xda:  // Set bit 3 in register D, flags not affectedy
-            bit_set(reg.D, 3);
-            cycle(8);
-            break;
-        case 0xdb:  // Set bit 3 in register E, flags not affected
-            bit_set(reg.E, 3);
-            cycle(8);
-            break;
-        case 0xdc:  // Set bit 3 in register H, flags not affected
-            bit_set(reg.H, 3);
-            cycle(8);
-            break;
-        case 0xdd:  // Set bit 3 in register L, flags not affected
-            bit_set(reg.L, 3);
-            cycle(8);
-            break;
-        case 0xde:  // Set bit 3 in byte at (HL), flags not affected
-            bit_set(reg.HL, 3);
-            cycle(16);
-            break;
-        case 0xe7:  // Set bit 4 in register A, flags not affected
-            bit_set(reg.A, 4);
-            cycle(8);
-            break;
-        case 0xe0:  // Set bit 4 in register B, flags not affected
-            bit_set(reg.B, 4);
-            cycle(8);
-            break;
-        case 0xe1:  // Set bit 4 in register C, flags not affected
-            bit_set(reg.C, 4);
-            cycle(8);
-            break;
-        case 0xe2:  // Set bit 4 in register D, flags not affectedy
-            bit_set(reg.D, 4);
-            cycle(8);
-            break;
-        case 0xe3:  // Set bit 4 in register E, flags not affected
-            bit_set(reg.E, 4);
-            cycle(8);
-            break;
-        case 0xe4:  // Set bit 4 in register H, flags not affected
-            bit_set(reg.H, 4);
-            cycle(8);
-            break;
-        case 0xe5:  // Set bit 4 in register L, flags not affected
-            bit_set(reg.L, 4);
-            cycle(8);
-            break;
-        case 0xe6:  // Set bit 4 in byte at (HL), flags not affected
-            bit_set(reg.HL, 4);
-            cycle(16);
-            break;
-        case 0xef:  // Set bit 5 in register A, flags not affected
-            bit_set(reg.A, 5);
-            cycle(8);
-            break;
-        case 0xe8:  // Set bit 5 in register B, flags not affected
-            bit_set(reg.B, 5);
-            cycle(8);
-            break;
-        case 0xe9:  // Set bit 5 in register C, flags not affected
-            bit_set(reg.C, 5);
-            cycle(8);
-            break;
-        case 0xea:  // Set bit 5 in register D, flags not affectedy
-            bit_set(reg.D, 5);
-            cycle(8);
-            break;
-        case 0xeb:  // Set bit 5 in register E, flags not affected
-            bit_set(reg.E, 5);
-            cycle(8);
-            break;
-        case 0xec:  // Set bit 5 in register H, flags not affected
-            bit_set(reg.H, 5);
-            cycle(8);
-            break;
-        case 0xed:  // Set bit 5 in register L, flags not affected
-            bit_set(reg.L, 5);
-            cycle(8);
-            break;
-        case 0xee:  // Set bit 5 in byte at (HL), flags not affected
-            bit_set(reg.HL, 5);
-            cycle(16);
-            break;
-       case 0xf7:  // Set bit 6 in register A, flags not affected
-            bit_set(reg.A, 6);
-            cycle(8);
-            break;
-        case 0xf0:  // Set bit 6 in register B, flags not affected
-            bit_set(reg.B, 6);
-            cycle(8);
-            break;
-        case 0xf1:  // Set bit 6 in register C, flags not affected
-            bit_set(reg.C, 6);
-            cycle(8);
-            break;
-        case 0xf2:  // Set bit 6 in register D, flags not affectedy
-            bit_set(reg.D, 6);
-            cycle(8);
-            break;
-        case 0xf3:  // Set bit 6 in register E, flags not affected
-            bit_set(reg.E, 6);
-            cycle(8);
-            break;
-        case 0xf4:  // Set bit 6 in register H, flags not affected
-            bit_set(reg.H, 6);
-            cycle(8);
-            break;
-        case 0xf5:  // Set bit 6 in register L, flags not affected
-            bit_set(reg.L, 6);
-            cycle(8);
-            break;
-        case 0xf6:  // Set bit 6 in byte at (HL), flags not affected
-            bit_set(reg.HL, 6);
-            cycle(16);
-            break;
-        case 0xff:  // Set bit 7 in register A, flags not affected
-            bit_set(reg.A, 7);
-            cycle(8);
-            break;
-        case 0xf8:  // Set bit 7 in register B, flags not affected
-            bit_set(reg.B, 7);
-            cycle(8);
-            break;
-        case 0xf9:  // Set bit 7 in register C, flags not affected
-            bit_set(reg.C, 7);
-            cycle(8);
-            break;
-        case 0xfa:  // Set bit 7 in register D, flags not affectedy
-            bit_set(reg.D, 7);
-            cycle(8);
-            break;
-        case 0xfb:  // Set bit 7 in register E, flags not affected
-            bit_set(reg.E, 7);
-            cycle(8);
-            break;
-        case 0xfc:  // Set bit 7 in register H, flags not affected
-            bit_set(reg.H, 7);
-            cycle(8);
-            break;
-        case 0xfd:  // Set bit 7 in register L, flags not affected
-            bit_set(reg.L, 7);
-            cycle(8);
-            break;
-        case 0xfe:  // Set bit 7 in byte at (HL), flags not affected
-            bit_set(reg.HL, 7);
-            cycle(16);
-            break;
-        case 0x87:  // Reset bit 0 in register A, flags not affected
-            bit_reset(reg.A, 0);
-            cycle(8);
-            break;
-        case 0x80:  // Reset bit 0 in register B, flags not affected
-            bit_reset(reg.B, 0);
-            cycle(8);
-            break;
-        case 0x81:  // Reset bit 0 in register C, flags not affected
-            bit_reset(reg.C, 0);
-            cycle(8);
-            break;
-        case 0x82:  // Reset bit 0 in register D, flags not affectedy
-            bit_reset(reg.D, 0);
-            cycle(8);
-            break;
-        case 0x83:  // Reset bit 0 in register E, flags not affected
-            bit_reset(reg.E, 0);
-            cycle(8);
-            break;
-        case 0x84:  // Reset bit 0 in register H, flags not affected
-            bit_reset(reg.H, 0);
-            cycle(8);
-            break;
-        case 0x85:  // Reset bit 0 in register L, flags not affected
-            bit_reset(reg.L, 0);
-            cycle(8);
-            break;
-        case 0x86:  // Reset bit 0 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 0);
-            cycle(16);
-            break;
-        case 0x8f:  // Reset bit 1 in register A, flags not affected
-            bit_reset(reg.A, 1);
-            cycle(8);
-            break;
-        case 0x88:  // Reset bit 1 in register B, flags not affected
-            bit_reset(reg.B, 1);
-            cycle(8);
-            break;
-        case 0x89:  // Reset bit 1 in register C, flags not affected
-            bit_reset(reg.C, 1);
-            cycle(8);
-            break;
-        case 0x8a:  // Reset bit 1 in register D, flags not affectedy
-            bit_reset(reg.D, 1);
-            cycle(8);
-            break;
-        case 0x8b:  // Reset bit 1 in register E, flags not affected
-            bit_reset(reg.E, 1);
-            cycle(8);
-            break;
-        case 0x8c:  // Reset bit 1 in register H, flags not affected
-            bit_reset(reg.H, 1);
-            cycle(8);
-            break;
-        case 0x8d:  // Reset bit 1 in register L, flags not affected
-            bit_reset(reg.L, 1);
-            cycle(8);
-            break;
-        case 0x8e:  // Reset bit 1 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 1);
-            cycle(16);
-            break;
-        case 0x97:  // Reset bit 2 in register A, flags not affected
-            bit_reset(reg.A, 2);
-            cycle(8);
-            break;
-        case 0x90:  // Reset bit 2 in register B, flags not affected
-            bit_reset(reg.B, 2);
-            cycle(8);
-            break;
-        case 0x91:  // Reset bit 2 in register C, flags not affected
-            bit_reset(reg.C, 2);
-            cycle(8);
-            break;
-        case 0x92:  // Reset bit 2 in register D, flags not affectedy
-            bit_reset(reg.D, 2);
-            cycle(8);
-            break;
-        case 0x93:  // Reset bit 2 in register E, flags not affected
-            bit_reset(reg.E, 2);
-            cycle(8);
-            break;
-        case 0x94:  // Reset bit 2 in register H, flags not affected
-            bit_reset(reg.H, 2);
-            cycle(8);
-            break;
-        case 0x95:  // Reset bit 2 in register L, flags not affected
-            bit_reset(reg.L, 2);
-            cycle(8);
-            break;
-        case 0x96:  // Reset bit 2 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 2);
-            cycle(16);
-            break;
-        case 0x9f:  // Reset bit 3 in register A, flags not affected
-            bit_reset(reg.A, 3);
-            cycle(8);
-            break;
-        case 0x98:  // Reset bit 3 in register B, flags not affected
-            bit_reset(reg.B, 3);
-            cycle(8);
-            break;
-        case 0x99:  // Reset bit 3 in register C, flags not affected
-            bit_reset(reg.C, 3);
-            cycle(8);
-            break;
-        case 0x9a:  // Reset bit 3 in register D, flags not affectedy
-            bit_reset(reg.D, 3);
-            cycle(8);
-            break;
-        case 0x9b:  // Reset bit 3 in register E, flags not affected
-            bit_reset(reg.E, 3);
-            cycle(8);
-            break;
-        case 0x9c:  // Reset bit 3 in register H, flags not affected
-            bit_reset(reg.H, 3);
-            cycle(8);
-            break;
-        case 0x9d:  // Reset bit 3 in register L, flags not affected
-            bit_reset(reg.L, 3);
-            cycle(8);
-            break;
-        case 0x9e:  // Reset bit 3 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 3);
-            cycle(16);
-            break;
-        case 0xa7:  // Reset bit 4 in register A, flags not affected
-            bit_reset(reg.A, 4);
-            cycle(8);
-            break;
-        case 0xa0:  // Reset bit 4 in register B, flags not affected
-            bit_reset(reg.B, 4);
-            cycle(8);
-            break;
-        case 0xa1:  // Reset bit 4 in register C, flags not affected
-            bit_reset(reg.C, 4);
-            cycle(8);
-            break;
-        case 0xa2:  // Reset bit 4 in register D, flags not affectedy
-            bit_reset(reg.D, 4);
-            cycle(8);
-            break;
-        case 0xa3:  // Reset bit 4 in register E, flags not affected
-            bit_reset(reg.E, 4);
-            cycle(8);
-            break;
-        case 0xa4:  // Reset bit 4 in register H, flags not affected
-            bit_reset(reg.H, 4);
-            cycle(8);
-            break;
-        case 0xa5:  // Reset bit 4 in register L, flags not affected
-            bit_reset(reg.L, 4);
-            cycle(8);
-            break;
-        case 0xa6:  // Reset bit 4 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 4);
-            cycle(16);
-            break;
-        case 0xaf:  // Reset bit 5 in register A, flags not affected
-            bit_reset(reg.A, 5);
-            cycle(8);
-            break;
-        case 0xa8:  // Reset bit 5 in register B, flags not affected
-            bit_reset(reg.B, 5);
-            cycle(8);
-            break;
-        case 0xa9:  // Reset bit 5 in register C, flags not affected
-            bit_reset(reg.C, 5);
-            cycle(8);
-            break;
-        case 0xaa:  // Reset bit 5 in register D, flags not affectedy
-            bit_reset(reg.D, 5);
-            cycle(8);
-            break;
-        case 0xab:  // Reset bit 5 in register E, flags not affected
-            bit_reset(reg.E, 5);
-            cycle(8);
-            break;
-        case 0xac:  // Reset bit 5 in register H, flags not affected
-            bit_reset(reg.H, 5);
-            cycle(8);
-            break;
-        case 0xad:  // Reset bit 5 in register L, flags not affected
-            bit_reset(reg.L, 5);
-            cycle(8);
-            break;
-        case 0xae:  // Reset bit 5 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 5);
-            cycle(16);
-            break;
-        case 0xb7:  // Reset bit 6 in register A, flags not affected
-            bit_reset(reg.A, 6);
-            cycle(8);
-            break;
-        case 0xb0:  // Reset bit 6 in register B, flags not affected
-            bit_reset(reg.B, 6);
-            cycle(8);
-            break;
-        case 0xb1:  // Reset bit 6 in register C, flags not affected
-            bit_reset(reg.C, 6);
-            cycle(8);
-            break;
-        case 0xb2:  // Reset bit 6 in register D, flags not affectedy
-            bit_reset(reg.D, 6);
-            cycle(8);
-            break;
-        case 0xb3:  // Reset bit 6 in register E, flags not affected
-            bit_reset(reg.E, 6);
-            cycle(8);
-            break;
-        case 0xb4:  // Reset bit 6 in register H, flags not affected
-            bit_reset(reg.H, 6);
-            cycle(8);
-            break;
-        case 0xb5:  // Reset bit 6 in register L, flags not affected
-            bit_reset(reg.L, 6);
-            cycle(8);
-            break;
-        case 0xb6:  // Reset bit 6 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 6);
-            cycle(16);
-            break;
-        case 0xbf:  // Reset bit 7 in register A, flags not affected
-            bit_reset(reg.A, 7);
-            cycle(8);
-            break;
-        case 0xb8:  // Reset bit 7 in register B, flags not affected
-            bit_reset(reg.B, 7);
-            cycle(8);
-            break;
-        case 0xb9:  // Reset bit 7 in register C, flags not affected
-            bit_reset(reg.C, 7);
-            cycle(8);
-            break;
-        case 0xba:  // Reset bit 7 in register D, flags not affectedy
-            bit_reset(reg.D, 7);
-            cycle(8);
-            break;
-        case 0xbb:  // Reset bit 7 in register E, flags not affected
-            bit_reset(reg.E, 7);
-            cycle(8);
-            break;
-        case 0xbc:  // Reset bit 7 in register H, flags not affected
-            bit_reset(reg.H, 7);
-            cycle(8);
-            break;
-        case 0xbd:  // Reset bit 7 in register L, flags not affected
-            bit_reset(reg.L, 7);
-            cycle(8);
-            break;
-        case 0xbe:  // Reset bit 7 in byte at (HL), flags not affected
-            bit_reset(reg.HL, 7);
-            cycle(16);
+            BitOperationSwap(RegisterSet.HL);
+            CycleCPU(16);
+            break;
+        case 0x07:  // Rotate contents of A register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.A, true); // Carry = true (Rotate left with Carry RLC A)
+            CycleCPU(8);
+            break;
+        case 0x00:  // Rotate contents of B register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.B, true); // Carry = true (Rotate left with Carry RLC B)
+            CycleCPU(8);
+            break;
+        case 0x01:  // Rotate contents of C register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.C, true); // Carry = true (Rotate left with Carry RLC C)
+            CycleCPU(8);
+            break;
+        case 0x02:  // Rotate contents of D register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.D, true); // Carry = true (Rotate left with Carry RLC D)
+            CycleCPU(8);
+            break;
+        case 0x03:  // Rotate contents of E register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.E, true); // Carry = true (Rotate left with Carry RLC E)
+            CycleCPU(8);
+            break;
+        case 0x04:  // Rotate contents of H register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.H, true); // Carry = true (Rotate left with Carry RLC H)
+            CycleCPU(8);
+            break;
+        case 0x05:  // Rotate contents of L register left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.L, true); // Carry = true (Rotate left with Carry RLC L)
+            CycleCPU(8);
+            break;
+        case 0x06:  // Rotate contents of byte at (HL) left and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.HL, true); // Carry = true (Rotate left with Carry RLC L)
+            CycleCPU(16);
+            break;
+        case 0x17:  // Rotate contents of A register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.A, false); // Carry = false (Rotate left RL A)
+            CycleCPU(8);
+            break;
+        case 0x10:  // Rotate contents of B register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.B, false); // Carry = false (Rotate left with Carry RL B)
+            CycleCPU(8);
+            break;
+        case 0x11:  // Rotate contents of C register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.C, false); // Carry = false (Rotate left with Carry RL C)
+            CycleCPU(8);
+            break;
+        case 0x12:  // Rotate contents of D register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.D, false); // Carry = false (Rotate left with Carry RL D)
+            CycleCPU(8);
+            break;
+        case 0x13:  // Rotate contents of E register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.E, false); // Carry = false (Rotate left with Carry RL E)
+            CycleCPU(8);
+            break;
+        case 0x14:  // Rotate contents of H register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.H, false); // Carry = false (Rotate left with Carry RL H)
+            CycleCPU(8);
+            break;
+        case 0x15:  // Rotate contents of L register left through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.L, false); // Carry = false (Rotate left with Carry RL L)
+            CycleCPU(8);
+            break;
+        case 0x16:  // Rotate contents of byte at (HL) lef through Carry flag and store Bit 7 in CF, flags updated
+            BitOperationRL(RegisterSet.HL, false); // Carry = false (Rotate left with Carry RL L)
+            CycleCPU(16);
+            break;
+        case 0x0f:  // Rotate contents of A register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.A, true); // Carry = true (Rotate right with Carry RRC A)
+            CycleCPU(8);
+            break;
+        case 0x08:  // Rotate contents of B register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.B, true); // Carry = true (Rotate right with Carry RRC B)
+            CycleCPU(8);
+            break;
+        case 0x09:  // Rotate contents of C register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.C, true); // Carry = true (Rotate right with Carry RRC C)
+            CycleCPU(8);
+            break;
+        case 0x0a:  // Rotate contents of D register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.D, true); // Carry = true (Rotate right with Carry RRC D)
+            CycleCPU(8);
+            break;
+        case 0x0b:  // Rotate contents of E register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.E, true); // Carry = true (Rotate right with Carry RRC E)
+            CycleCPU(8);
+            break;
+        case 0x0c:  // Rotate contents of H register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.H, true); // Carry = true (Rotate right with Carry RRC H)
+            CycleCPU(8);
+            break;
+        case 0x0d:  // Rotate contents of L register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.L, true); // Carry = true (Rotate right with Carry RRC L)
+            CycleCPU(8);
+            break;
+        case 0x0e:  // Rotate contents of byte at (HL) right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.HL, true); // Carry = true (Rotate right with Carry RRC (HL))
+            CycleCPU(16);
+            break;
+        case 0x1f:  // Rotate contents of A register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.A, false); // Carry = false (Rotate right RR A)
+            CycleCPU(8);
+            break;
+        case 0x18:  // Rotate contents of B register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.B, false); // Carry = false (Rotate right with Carry RR B)
+            CycleCPU(8);
+            break;
+        case 0x19:  // Rotate contents of C register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.C, false); // Carry = false (Rotate right with Carry RR C)
+            CycleCPU(8);
+            break;
+        case 0x1a:  // Rotate contents of D register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.D, false); // Carry = false (Rotate right with Carry RR D)
+            CycleCPU(8);
+            break;
+        case 0x1b:  // Rotate contents of E register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.E, false); // Carry = false (Rotate right with Carry RR E)
+            CycleCPU(8);
+            break;
+        case 0x1c:  // Rotate contents of H register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.H, false); // Carry = false (Rotate right with Carry RR H)
+            CycleCPU(8);
+            break;
+        case 0x1d:  // Rotate contents of L register right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.L, false); // Carry = false (Rotate right with Carry RR L)
+            CycleCPU(8);
+            break;
+        case 0x1e:  // Rotate contents of byte at (HL) right and store Bit 0 in CF, flags updated
+            BitOperationRR(RegisterSet.HL, false); // Carry = false (Rotate right with Carry RR (HL))
+            CycleCPU(16);
+            break;
+        case 0x27:  // Shift contents of register A left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.A);
+            CycleCPU(8);
+            break;
+        case 0x20:  // Shift contents of register B left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.B);
+            CycleCPU(8);
+            break;
+        case 0x21:  // Shift contents of register C left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.C);
+            CycleCPU(8);
+            break;
+        case 0x22:  // Shift contents of register D left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.D);
+            CycleCPU(8);
+            break;
+        case 0x23:  // Shift contents of register E left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.E);
+            CycleCPU(8);
+            break;
+        case 0x24:  // Shift contents of register H left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.H);
+            CycleCPU(8);
+            break;
+        case 0x25:  // Shift contents of register L left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.L);
+            CycleCPU(8);
+            break;
+        case 0x26:  // Shift contents of byte at (HL) left and store Bit 7 in CF, Bit0 = 0, flags updated
+            BitOperationSLA(RegisterSet.HL);
+            CycleCPU(16);
+            break;
+        case 0x2f:  // Shift contents of register A right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.A);
+            CycleCPU(8);
+            break;
+        case 0x28:  // Shift contents of register B right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.B);
+            CycleCPU(8);
+            break;
+        case 0x29:  // Shift contents of register C right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.C);
+            CycleCPU(8);
+            break;
+        case 0x2a:  // Shift contents of register D right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.D);
+            CycleCPU(8);
+            break;
+        case 0x2b:  // Shift contents of register E right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.E);
+            CycleCPU(8);
+            break;
+        case 0x2c:  // Shift contents of register H right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.H);
+            CycleCPU(8);
+            break;
+        case 0x2d:  // Shift contents of register L right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.L);
+            CycleCPU(8);
+            break;
+        case 0x2e:  // Shift contents byte at (HL) right and store Bit 0 in CF, Bit7 unchanged, flags updated
+            BitOperationSRA(RegisterSet.HL);
+            CycleCPU(16);
+            break;
+        case 0x3f:  // Shift contents of register A right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.A);
+            CycleCPU(8);
+            break;
+        case 0x38:  // Shift contents of register B right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.B);
+            CycleCPU(8);
+            break;
+        case 0x39:  // Shift contents of register C right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.C);
+            CycleCPU(8);
+            break;
+        case 0x3a:  // Shift contents of register D right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.D);
+            CycleCPU(8);
+            break;
+        case 0x3b:  // Shift contents of register E right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.E);
+            CycleCPU(8);
+            break;
+        case 0x3c:  // Shift contents of register H right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.H);
+            CycleCPU(8);
+            break;
+        case 0x3d:  // Shift contents of register L right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.L);
+            CycleCPU(8);
+            break;
+        case 0x3e:  // Shift contents byte at (HL) right and store Bit 0 in CF, Bit7 = 0, flags updated
+            BitOperationSRL(RegisterSet.HL);
+            CycleCPU(16);
+            break;
+        case 0x47:  // Test Bit 0 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 0);
+            CycleCPU(8);
+            break;
+        case 0x40:  // Test Bit 0 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 0);
+            CycleCPU(8);
+            break;
+        case 0x41:  // Test Bit 0 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 0);
+            CycleCPU(8);
+            break;
+        case 0x42:  // Test Bit 0 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 0);
+            CycleCPU(8);
+            break;
+        case 0x43:  // Test Bit 0 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 0);
+            CycleCPU(8);
+            break;
+        case 0x44:  // Test Bit 0 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 0);
+            CycleCPU(8);
+            break;
+        case 0x45:  // Test Bit 0 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 0);
+            CycleCPU(8);
+            break;
+        case 0x46:  // Test Bit 0 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 0);
+            CycleCPU(16);
+            break;
+        case 0x4f:  // Test Bit 1 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 1);
+            CycleCPU(8);
+            break;
+        case 0x48:  // Test Bit 1 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 1);
+            CycleCPU(8);
+            break;
+        case 0x49:  // Test Bit 1 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 1);
+            CycleCPU(8);
+            break;
+        case 0x4a:  // Test Bit 1 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 1);
+            CycleCPU(8);
+            break;
+        case 0x4b:  // Test Bit 1 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 1);
+            CycleCPU(8);
+            break;
+        case 0x4c:  // Test Bit 1 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 1);
+            CycleCPU(8);
+            break;
+        case 0x4d:  // Test Bit 1 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 1);
+            CycleCPU(8);
+            break;
+        case 0x4e:  // Test Bit 1 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 1);
+            CycleCPU(16);
+            break;
+        case 0x57:  // Test Bit 2 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 2);
+            CycleCPU(8);
+            break;
+        case 0x50:  // Test Bit 2 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 2);
+            CycleCPU(8);
+            break;
+        case 0x51:  // Test Bit 2 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 2);
+            CycleCPU(8);
+            break;
+        case 0x52:  // Test Bit 2 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 2);
+            CycleCPU(8);
+            break;
+        case 0x53:  // Test Bit 2 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 2);
+            CycleCPU(8);
+            break;
+        case 0x54:  // Test Bit 2 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 2);
+            CycleCPU(8);
+            break;
+        case 0x55:  // Test Bit 2 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 2);
+            CycleCPU(8);
+            break;
+        case 0x56:  // Test Bit 2 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 2);
+            CycleCPU(16);
+            break;
+        case 0x5f:  // Test Bit 3 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 3);
+            CycleCPU(8);
+            break;
+        case 0x58:  // Test Bit 3 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 3);
+            CycleCPU(8);
+            break;
+        case 0x59:  // Test Bit 3 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 3);
+            CycleCPU(8);
+            break;
+        case 0x5a:  // Test Bit 3 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.E, 3);
+            CycleCPU(8);
+            break;
+        case 0x5b:  // Test Bit 3 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.D, 3);
+            CycleCPU(8);
+            break;
+        case 0x5c:  // Test Bit 3 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 3);
+            CycleCPU(8);
+            break;
+        case 0x5d:  // Test Bit 3 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 3);
+            CycleCPU(8);
+            break;
+        case 0x5e:  // Test Bit 3 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 3);
+            CycleCPU(16);
+            break;
+        case 0x67:  // Test Bit 4 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 4);
+            CycleCPU(8);
+            break;
+        case 0x60:  // Test Bit 4 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 4);
+            CycleCPU(8);
+            break;
+        case 0x61:  // Test Bit 4 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 4);
+            CycleCPU(8);
+            break;
+        case 0x62:  // Test Bit 4 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 4);
+            CycleCPU(8);
+            break;
+        case 0x63:  // Test Bit 4 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 4);
+            CycleCPU(8);
+            break;
+        case 0x64:  // Test Bit 4 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 4);
+            CycleCPU(8);
+            break;
+        case 0x65:  // Test Bit 4 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 4);
+            CycleCPU(8);
+            break;
+        case 0x66:  // Test Bit 4 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 4);
+            CycleCPU(16);
+            break;
+        case 0x6f:  // Test Bit 5 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 5);
+            CycleCPU(8);
+            break;
+        case 0x68:  // Test Bit 5 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 5);
+            CycleCPU(8);
+            break;
+        case 0x69:  // Test Bit 5 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 5);
+            CycleCPU(8);
+            break;
+        case 0x6a:  // Test Bit 5 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 5);
+            CycleCPU(8);
+            break;
+        case 0x6b:  // Test Bit 5 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 5);
+            CycleCPU(8);
+            break;
+        case 0x6c:  // Test Bit 5 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 5);
+            CycleCPU(8);
+            break;
+        case 0x6d:  // Test Bit 5 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 5);
+            CycleCPU(8);
+            break;
+        case 0x6e:  // Test Bit 5 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 5);
+            CycleCPU(16);
+            break;
+        case 0x77:  // Test Bit 6 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 6);
+            CycleCPU(8);
+            break;
+        case 0x70:  // Test Bit 6 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 6);
+            CycleCPU(8);
+            break;
+        case 0x71:  // Test Bit 6 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 6);
+            CycleCPU(8);
+            break;
+        case 0x72:  // Test Bit 6 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 6);
+            CycleCPU(8);
+            break;
+        case 0x73:  // Test Bit 6 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 6);
+            CycleCPU(8);
+            break;
+        case 0x74:  // Test Bit 6 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 6);
+            CycleCPU(8);
+            break;
+        case 0x75:  // Test Bit 6 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 6);
+            CycleCPU(8);
+            break;
+        case 0x76:  // Test Bit 6 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 6);
+            CycleCPU(16);
+            break;
+        case 0x7f:  // Test Bit 7 in register A and set flags accordingly
+            BitOperationTest(RegisterSet.A, 7);
+            CycleCPU(8);
+            break;
+        case 0x78:  // Test Bit 7 in register B and set flags accordingly
+            BitOperationTest(RegisterSet.B, 7);
+            CycleCPU(8);
+            break;
+        case 0x79:  // Test Bit 7 in register C and set flags accordingly
+            BitOperationTest(RegisterSet.C, 7);
+            CycleCPU(8);
+            break;
+        case 0x7a:  // Test Bit 7 in register D and set flags accordingly
+            BitOperationTest(RegisterSet.D, 7);
+            CycleCPU(8);
+            break;
+        case 0x7b:  // Test Bit 7 in register E and set flags accordingly
+            BitOperationTest(RegisterSet.E, 7);
+            CycleCPU(8);
+            break;
+        case 0x7c:  // Test Bit 7 in register H and set flags accordingly
+            BitOperationTest(RegisterSet.H, 7);
+            CycleCPU(8);
+            break;
+        case 0x7d:  // Test Bit 7 in register L and set flags accordingly
+            BitOperationTest(RegisterSet.L, 7);
+            CycleCPU(8);
+            break;
+        case 0x7e:  // Test Bit 7 in byte at (HL) and set flags accordingly
+            BitOperationTest(RegisterSet.HL, 7);
+            CycleCPU(16);
+            break;
+        case 0xc7:  // Set Bit 0 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 0);
+            CycleCPU(8);
+            break;
+        case 0xc0:  // Set Bit 0 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 0);
+            CycleCPU(8);
+            break;
+        case 0xc1:  // Set Bit 0 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 0);
+            CycleCPU(8);
+            break;
+        case 0xc2:  // Set Bit 0 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 0);
+            CycleCPU(8);
+            break;
+        case 0xc3:  // Set Bit 0 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 0);
+            CycleCPU(8);
+            break;
+        case 0xc4:  // Set Bit 0 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 0);
+            CycleCPU(8);
+            break;
+        case 0xc5:  // Set Bit 0 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 0);
+            CycleCPU(8);
+            break;
+        case 0xc6:  // Set Bit 0 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 0);
+            CycleCPU(16);
+            break;
+        case 0xcf:  // Set Bit 1 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 1);
+            CycleCPU(8);
+            break;
+        case 0xc8:  // Set Bit 1 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 1);
+            CycleCPU(8);
+            break;
+        case 0xc9:  // Set Bit 1 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 1);
+            CycleCPU(8);
+            break;
+        case 0xca:  // Set Bit 1 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 1);
+            CycleCPU(8);
+            break;
+        case 0xcb:  // Set Bit 1 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 1);
+            CycleCPU(8);
+            break;
+        case 0xcc:  // Set Bit 1 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 1);
+            CycleCPU(8);
+            break;
+        case 0xcd:  // Set Bit 1 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 1);
+            CycleCPU(8);
+            break;
+        case 0xce:  // Set Bit 1 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 1);
+            CycleCPU(16);
+            break;
+        case 0xd7:  // Set Bit 2 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 2);
+            CycleCPU(8);
+            break;
+        case 0xd0:  // Set Bit 2 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 2);
+            CycleCPU(8);
+            break;
+        case 0xd1:  // Set Bit 2 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 2);
+            CycleCPU(8);
+            break;
+        case 0xd2:  // Set Bit 2 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 2);
+            CycleCPU(8);
+            break;
+        case 0xd3:  // Set Bit 2 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 2);
+            CycleCPU(8);
+            break;
+        case 0xd4:  // Set Bit 2 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 2);
+            CycleCPU(8);
+            break;
+        case 0xd5:  // Set Bit 2 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 2);
+            CycleCPU(8);
+            break;
+        case 0xd6:  // Set Bit 2 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 2);
+            CycleCPU(16);
+            break;
+        case 0xdf:  // Set Bit 3 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 3);
+            CycleCPU(8);
+            break;
+        case 0xd8:  // Set Bit 3 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 3);
+            CycleCPU(8);
+            break;
+        case 0xd9:  // Set Bit 3 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 3);
+            CycleCPU(8);
+            break;
+        case 0xda:  // Set Bit 3 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 3);
+            CycleCPU(8);
+            break;
+        case 0xdb:  // Set Bit 3 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 3);
+            CycleCPU(8);
+            break;
+        case 0xdc:  // Set Bit 3 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 3);
+            CycleCPU(8);
+            break;
+        case 0xdd:  // Set Bit 3 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 3);
+            CycleCPU(8);
+            break;
+        case 0xde:  // Set Bit 3 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 3);
+            CycleCPU(16);
+            break;
+        case 0xe7:  // Set Bit 4 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 4);
+            CycleCPU(8);
+            break;
+        case 0xe0:  // Set Bit 4 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 4);
+            CycleCPU(8);
+            break;
+        case 0xe1:  // Set Bit 4 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 4);
+            CycleCPU(8);
+            break;
+        case 0xe2:  // Set Bit 4 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 4);
+            CycleCPU(8);
+            break;
+        case 0xe3:  // Set Bit 4 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 4);
+            CycleCPU(8);
+            break;
+        case 0xe4:  // Set Bit 4 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 4);
+            CycleCPU(8);
+            break;
+        case 0xe5:  // Set Bit 4 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 4);
+            CycleCPU(8);
+            break;
+        case 0xe6:  // Set Bit 4 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 4);
+            CycleCPU(16);
+            break;
+        case 0xef:  // Set Bit 5 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 5);
+            CycleCPU(8);
+            break;
+        case 0xe8:  // Set Bit 5 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 5);
+            CycleCPU(8);
+            break;
+        case 0xe9:  // Set Bit 5 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 5);
+            CycleCPU(8);
+            break;
+        case 0xea:  // Set Bit 5 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 5);
+            CycleCPU(8);
+            break;
+        case 0xeb:  // Set Bit 5 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 5);
+            CycleCPU(8);
+            break;
+        case 0xec:  // Set Bit 5 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 5);
+            CycleCPU(8);
+            break;
+        case 0xed:  // Set Bit 5 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 5);
+            CycleCPU(8);
+            break;
+        case 0xee:  // Set Bit 5 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 5);
+            CycleCPU(16);
+            break;
+       case 0xf7:  // Set Bit 6 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 6);
+            CycleCPU(8);
+            break;
+        case 0xf0:  // Set Bit 6 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 6);
+            CycleCPU(8);
+            break;
+        case 0xf1:  // Set Bit 6 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 6);
+            CycleCPU(8);
+            break;
+        case 0xf2:  // Set Bit 6 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 6);
+            CycleCPU(8);
+            break;
+        case 0xf3:  // Set Bit 6 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 6);
+            CycleCPU(8);
+            break;
+        case 0xf4:  // Set Bit 6 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 6);
+            CycleCPU(8);
+            break;
+        case 0xf5:  // Set Bit 6 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 6);
+            CycleCPU(8);
+            break;
+        case 0xf6:  // Set Bit 6 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 6);
+            CycleCPU(16);
+            break;
+        case 0xff:  // Set Bit 7 in register A, flags not affected
+            BitOperationSET(RegisterSet.A, 7);
+            CycleCPU(8);
+            break;
+        case 0xf8:  // Set Bit 7 in register B, flags not affected
+            BitOperationSET(RegisterSet.B, 7);
+            CycleCPU(8);
+            break;
+        case 0xf9:  // Set Bit 7 in register C, flags not affected
+            BitOperationSET(RegisterSet.C, 7);
+            CycleCPU(8);
+            break;
+        case 0xfa:  // Set Bit 7 in register D, flags not affectedy
+            BitOperationSET(RegisterSet.D, 7);
+            CycleCPU(8);
+            break;
+        case 0xfb:  // Set Bit 7 in register E, flags not affected
+            BitOperationSET(RegisterSet.E, 7);
+            CycleCPU(8);
+            break;
+        case 0xfc:  // Set Bit 7 in register H, flags not affected
+            BitOperationSET(RegisterSet.H, 7);
+            CycleCPU(8);
+            break;
+        case 0xfd:  // Set Bit 7 in register L, flags not affected
+            BitOperationSET(RegisterSet.L, 7);
+            CycleCPU(8);
+            break;
+        case 0xfe:  // Set Bit 7 in byte at (HL), flags not affected
+            BitOperationSet(RegisterSet.HL, 7);
+            CycleCPU(16);
+            break;
+        case 0x87:  // Reset Bit 0 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 0);
+            CycleCPU(8);
+            break;
+        case 0x80:  // Reset Bit 0 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 0);
+            CycleCPU(8);
+            break;
+        case 0x81:  // Reset Bit 0 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 0);
+            CycleCPU(8);
+            break;
+        case 0x82:  // Reset Bit 0 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 0);
+            CycleCPU(8);
+            break;
+        case 0x83:  // Reset Bit 0 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 0);
+            CycleCPU(8);
+            break;
+        case 0x84:  // Reset Bit 0 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 0);
+            CycleCPU(8);
+            break;
+        case 0x85:  // Reset Bit 0 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 0);
+            CycleCPU(8);
+            break;
+        case 0x86:  // Reset Bit 0 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 0);
+            CycleCPU(16);
+            break;
+        case 0x8f:  // Reset Bit 1 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 1);
+            CycleCPU(8);
+            break;
+        case 0x88:  // Reset Bit 1 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 1);
+            CycleCPU(8);
+            break;
+        case 0x89:  // Reset Bit 1 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 1);
+            CycleCPU(8);
+            break;
+        case 0x8a:  // Reset Bit 1 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 1);
+            CycleCPU(8);
+            break;
+        case 0x8b:  // Reset Bit 1 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 1);
+            CycleCPU(8);
+            break;
+        case 0x8c:  // Reset Bit 1 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 1);
+            CycleCPU(8);
+            break;
+        case 0x8d:  // Reset Bit 1 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 1);
+            CycleCPU(8);
+            break;
+        case 0x8e:  // Reset Bit 1 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 1);
+            CycleCPU(16);
+            break;
+        case 0x97:  // Reset Bit 2 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 2);
+            CycleCPU(8);
+            break;
+        case 0x90:  // Reset Bit 2 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 2);
+            CycleCPU(8);
+            break;
+        case 0x91:  // Reset Bit 2 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 2);
+            CycleCPU(8);
+            break;
+        case 0x92:  // Reset Bit 2 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 2);
+            CycleCPU(8);
+            break;
+        case 0x93:  // Reset Bit 2 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 2);
+            CycleCPU(8);
+            break;
+        case 0x94:  // Reset Bit 2 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 2);
+            CycleCPU(8);
+            break;
+        case 0x95:  // Reset Bit 2 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 2);
+            CycleCPU(8);
+            break;
+        case 0x96:  // Reset Bit 2 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 2);
+            CycleCPU(16);
+            break;
+        case 0x9f:  // Reset Bit 3 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 3);
+            CycleCPU(8);
+            break;
+        case 0x98:  // Reset Bit 3 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 3);
+            CycleCPU(8);
+            break;
+        case 0x99:  // Reset Bit 3 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 3);
+            CycleCPU(8);
+            break;
+        case 0x9a:  // Reset Bit 3 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 3);
+            CycleCPU(8);
+            break;
+        case 0x9b:  // Reset Bit 3 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 3);
+            CycleCPU(8);
+            break;
+        case 0x9c:  // Reset Bit 3 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 3);
+            CycleCPU(8);
+            break;
+        case 0x9d:  // Reset Bit 3 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 3);
+            CycleCPU(8);
+            break;
+        case 0x9e:  // Reset Bit 3 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 3);
+            CycleCPU(16);
+            break;
+        case 0xa7:  // Reset Bit 4 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 4);
+            CycleCPU(8);
+            break;
+        case 0xa0:  // Reset Bit 4 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 4);
+            CycleCPU(8);
+            break;
+        case 0xa1:  // Reset Bit 4 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 4);
+            CycleCPU(8);
+            break;
+        case 0xa2:  // Reset Bit 4 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 4);
+            CycleCPU(8);
+            break;
+        case 0xa3:  // Reset Bit 4 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 4);
+            CycleCPU(8);
+            break;
+        case 0xa4:  // Reset Bit 4 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 4);
+            CycleCPU(8);
+            break;
+        case 0xa5:  // Reset Bit 4 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 4);
+            CycleCPU(8);
+            break;
+        case 0xa6:  // Reset Bit 4 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 4);
+            CycleCPU(16);
+            break;
+        case 0xaf:  // Reset Bit 5 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 5);
+            CycleCPU(8);
+            break;
+        case 0xa8:  // Reset Bit 5 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 5);
+            CycleCPU(8);
+            break;
+        case 0xa9:  // Reset Bit 5 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 5);
+            CycleCPU(8);
+            break;
+        case 0xaa:  // Reset Bit 5 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 5);
+            CycleCPU(8);
+            break;
+        case 0xab:  // Reset Bit 5 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 5);
+            CycleCPU(8);
+            break;
+        case 0xac:  // Reset Bit 5 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 5);
+            CycleCPU(8);
+            break;
+        case 0xad:  // Reset Bit 5 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 5);
+            CycleCPU(8);
+            break;
+        case 0xae:  // Reset Bit 5 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 5);
+            CycleCPU(16);
+            break;
+        case 0xb7:  // Reset Bit 6 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 6);
+            CycleCPU(8);
+            break;
+        case 0xb0:  // Reset Bit 6 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 6);
+            CycleCPU(8);
+            break;
+        case 0xb1:  // Reset Bit 6 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 6);
+            CycleCPU(8);
+            break;
+        case 0xb2:  // Reset Bit 6 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 6);
+            CycleCPU(8);
+            break;
+        case 0xb3:  // Reset Bit 6 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 6);
+            CycleCPU(8);
+            break;
+        case 0xb4:  // Reset Bit 6 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 6);
+            CycleCPU(8);
+            break;
+        case 0xb5:  // Reset Bit 6 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 6);
+            CycleCPU(8);
+            break;
+        case 0xb6:  // Reset Bit 6 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 6);
+            CycleCPU(16);
+            break;
+        case 0xbf:  // Reset Bit 7 in register A, flags not affected
+            BitOperationReset(RegisterSet.A, 7);
+            CycleCPU(8);
+            break;
+        case 0xb8:  // Reset Bit 7 in register B, flags not affected
+            BitOperationReset(RegisterSet.B, 7);
+            CycleCPU(8);
+            break;
+        case 0xb9:  // Reset Bit 7 in register C, flags not affected
+            BitOperationReset(RegisterSet.C, 7);
+            CycleCPU(8);
+            break;
+        case 0xba:  // Reset Bit 7 in register D, flags not affectedy
+            BitOperationReset(RegisterSet.D, 7);
+            CycleCPU(8);
+            break;
+        case 0xbb:  // Reset Bit 7 in register E, flags not affected
+            BitOperationReset(RegisterSet.E, 7);
+            CycleCPU(8);
+            break;
+        case 0xbc:  // Reset Bit 7 in register H, flags not affected
+            BitOperationReset(RegisterSet.H, 7);
+            CycleCPU(8);
+            break;
+        case 0xbd:  // Reset Bit 7 in register L, flags not affected
+            BitOperationReset(RegisterSet.L, 7);
+            CycleCPU(8);
+            break;
+        case 0xbe:  // Reset Bit 7 in byte at (HL), flags not affected
+            BitOperationReset(RegisterSet.HL, 7);
+            CycleCPU(16);
             break;
         
         default:
-            std::cerr << "[ERROR]: Cannot find opcode for CB instruction! : " << immediate << std::endl;
+            std::cerr << "[ERROR]: Cannot find opcode for CB instruction! : " << CBInstructionToExecute << std::endl;
     }
 }

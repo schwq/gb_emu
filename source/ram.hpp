@@ -6,14 +6,14 @@
 
 class RAM {
 public:
-    u8 readU8(u16 addr);
-    void writeU8(u16 addr, u8 data);
-    u16 readU16(u16 addr);
-    void writeU16(u16 addr, u16 data);
+    u8 ReadU8Data(u16 Address);
+    void WriteU8Data(u16 Address, u8 Data);
+    u16 ReadU16Data(u16 Address);
+    void WriteU16Data(u16 Address, u16 Data);
 
 private:
 
-    u8 memory[0xFFFF];
+    u8 EmulatorMemory[0xFFFF];
 
 };
 
