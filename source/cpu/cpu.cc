@@ -1,4 +1,5 @@
 #include "cpu.hpp"
+#include "../LogHandle.hpp"
 
 void CPU::InitializeCPU(RAM &ReferenceRAM)
 {
@@ -12,8 +13,9 @@ void CPU::InitializeCPU(RAM &ReferenceRAM)
 }
 
 #ifdef DEBUG
-void CPU::DebugCPU(instruction InstructionExecuted) {
-    std::cout << "STATE: Reg_A: " << RegisterSet.A << " / Reg_B: " << RegisterSet.B << " / Reg_C: " << RegisterSet.C << " / Reg_D: " << RegisterSet.D << " / Reg_E: " << RegisterSet.E << " / Reg_F: " << RegisterSet.F << " / Reg_SP: " << RegisterSet.SP << " / Reg_H: " << RegisterSet.H << " / Reg_L: " << RegisterSet.L << "" << NEWLINE;
+void CPU::DebugCPU(Instruction InstructionExecuted) {
+    std::cout << "______________________" << NEWLINE;
+    std::cout << "STATE: Reg_A: " << std::hex << RegisterSet.A << " / Reg_B: " << RegisterSet.B << " / Reg_C: " << RegisterSet.C << " / Reg_D: " << RegisterSet.D << " / Reg_E: " << RegisterSet.E << " / Reg_F: " << RegisterSet.F << " / Reg_SP: " << RegisterSet.SP << " / Reg_H: " << RegisterSet.H << " / Reg_L: " << RegisterSet.L << "" << NEWLINE;
     std::cout << "PC: " << std::hex << RegisterSet.PC << NEWLINE;
     std::cout << "FLAGS: Carry: " << GetFlagInteger(CARRY) << " / AddSub: " << GetFlagInteger(ADDSUB) << " / Half: " << GetFlagInteger(HALF) << " / Zero: " << GetFlagInteger(ZERO) << NEWLINE;
     std::cout << "Instruction: " << DebugLookUpMnemonic(InstructionExecuted.InstructionMnemonic) << " / Addr_Mode: " << DebugLookUpAddressMode(InstructionExecuted.InstructionAddressMode) << " / Op01: " << DebugLookUpOperand(InstructionExecuted.InstructionOperand01) << " / Op02: " << DebugLookUpOperand(InstructionExecuted.InstructionOperand02) << " / Flags: " << InstructionExecuted.InstructionAffectFlags << " / RST_Opcode: " << InstructionExecuted.InstructionRSTOpcode << " / Cycles: " << InstructionExecuted.InstructionCycles << NEWLINE;
@@ -22,16 +24,21 @@ void CPU::DebugCPU(instruction InstructionExecuted) {
 #endif
 
 void CPU::ExecuteCPU() {
-    instruction Instruction = SearchInstructionByOpcode(RegisterSet.PC);
-    ExecuteInstruction(Instruction);
+    Instruction Instruction = SearchInstructionByOpcode(RegisterSet.PC);
     DebugCPU(Instruction);
+    ExecuteInstruction(Instruction);
 }
 
 void CPU::CycleCPU(int Cycles) {
     return;        
 }
 
-void CPU::SetFlag(bool Value, FLAGS FlagToSetValue)
+void CPU::TerminateCPU() {
+    CPUShutDown = true;
+    ErrorLogMessage("[CRITICAL]: Shuting down CPU!");
+}
+
+void CPU::SetFlag(bool Value, EFlags FlagToSetValue)
 {
     switch (FlagToSetValue)
     {
@@ -48,11 +55,11 @@ void CPU::SetFlag(bool Value, FLAGS FlagToSetValue)
         BIT_SET(RegisterSet.F, 4, (int)Value);
         break;
     default:
-        std::cerr << "[ERROR]: setFlag could not find case for FLAG set" << NEWLINE;
+         ErrorLogMessage("[ERROR]: setFlag could not find case for FLAG set");
     }
 }
 
-int CPU::GetFlagInteger(FLAGS FlagToGet) {
+int CPU::GetFlagInteger(EFlags FlagToGet) {
     switch(FlagToGet) {
         case ZERO:
             return BIT(RegisterSet.F, 7);
@@ -63,7 +70,7 @@ int CPU::GetFlagInteger(FLAGS FlagToGet) {
         case CARRY:
             return BIT(RegisterSet.F, 4);
         default:   
-            std::cerr << "[ERROR]: Cannot find flag in function getFlag()!" << std::endl;
+            ErrorLogMessage("[ERROR]: Cannot find flag in function getFlag()!");
             return -1;
     }
 }
@@ -152,7 +159,8 @@ bool CPU::CheckConditionForInstruction(const char* Condition) {
     if(Condition == "CC_C") {
         return GetFlagInteger(CARRY) == 1 ? true : false;     
     }
-    std::cerr << "[ERROR]: Cannot find conditional_instruction_cc pattern! : " << Condition << std::endl;
+    ErrorLogMessage("[ERROR]: Cannot find conditional_instruction_cc pattern! : ", Condition);
+    TerminateCPU();
     return NULL;
 }
 
@@ -161,7 +169,7 @@ u16 CPU::U8ToU16Number(u8 LowByte, u8 HighByte)
     return (HighByte << 8) | LowByte;
 }
 
-u8 &CPU::LookUpRegisterU8(operand OperandToLookUp) {
+u8 &CPU::LookUpRegisterU8(EOperand OperandToLookUp) {
     switch (OperandToLookUp) {
         case reg_a:
             return RegisterSet.A;
@@ -184,14 +192,13 @@ u8 &CPU::LookUpRegisterU8(operand OperandToLookUp) {
         }
         default:
         {
-            std::cout << "[ERROR]: Cannot find U8 register_lookup: " << OperandToLookUp << NEWLINE;
-            u8 error = 0x00;
-            return error;
+            ErrorLogMessage("[ERROR]: Cannot find U8 register_lookup: ", OperandToLookUp);
+            TerminateCPU();
         }
     }
 }
 
-u16 &CPU::LookUpRegisterU16(operand OperandToLookUp)
+u16 &CPU::LookUpRegisterU16(EOperand OperandToLookUp)
 {
     switch (OperandToLookUp)
     {
@@ -211,24 +218,117 @@ u16 &CPU::LookUpRegisterU16(operand OperandToLookUp)
         return addr;
     }
     default:
-        std::cout << "[ERROR]: Cannot find U16 register_lookup: " << OperandToLookUp << NEWLINE;
+        ErrorLogMessage("[ERROR]: Cannot find U16 register_lookup: ", OperandToLookUp);
+        TerminateCPU();
     }
 }
 
-instruction CPU::SearchInstructionByOpcode(u8 SearchOpcode)
+const char* CPU::DebugLookUpMnemonic(EMnemonic MnemonicToLookUp) {
+    switch(MnemonicToLookUp) {
+        case IN_LD: return "Instruction LD";
+        case IN_LDH: return "Instruction LDH";
+        case IN_PUSH: return "Instruction PUSH";
+        case IN_POP: return "Instruction POP";
+        case IN_ADD: return "Instruction ADD";
+        case IN_ADC: return "Instruction ADC";
+        case IN_SUB: return "Instruction SUB";
+        case IN_SBC: return "Instruction SBC";
+        case IN_CP: return "Instruction CP";
+        case IN_INC: return "Instruction INC";
+        case IN_DEC: return "Instruction DEC";
+        case IN_AND: return "Instruction AND";
+        case IN_OR: return "Instruction OR";
+        case IN_XOR: return "Instruction XOR";
+        case IN_CCF: return "Instruction CCF";
+        case IN_SCF: return "Instruction SCF";
+        case IN_DAA: return "Instruction DAA";
+        case IN_CPL: return "Instruction CPL";
+        case IN_JP: return "Instruction JP";
+        case IN_JR: return "Instruction JR";
+        case IN_CALL: return "Instruction CALL";
+        case IN_RET: return "Instruction RET";
+        case IN_RETI: return "Instruction RETI";
+        case IN_RST: return "Instruction RST";
+        case IN_HALT: return "Instruction HALT";
+        case IN_STOP: return "Instruction STOP";
+        case IN_DI: return "Instruction DI";
+        case IN_EI: return "Instruction EI";
+        case IN_NOP: return "Instruction NOP";
+        case IN_RRA: return "Instruction RRA";
+        case IN_RLA: return "Instruction RLA";
+        case IN_CB: return "Instruction CB";
+        case IN_RRCA: return "Instruction RRCA";
+        case IN_RLCA: return "Instruction RLCA";
+        case IN_NONE: return "Instruction NONE";
+        default: return "[WARNING]: DebugLookUpMnemonic() cannot find Mnemonic to return const char*!";
+    }
+}
+
+const char* CPU::DebugLookUpOperand(EOperand OperandToLookUp) {
+    switch(OperandToLookUp) {
+        case reg_a: return "Register A";
+        case reg_b: return "Register B"; 
+        case reg_c: return "Register C";
+        case reg_d: return "Register D";
+        case reg_e: return "Register E";
+        case reg_h: return "Register H";
+        case reg_l: return "Register L";
+        case reg_bc: return "Register BC";
+        case reg_hl: return "Register HL";
+        case reg_sp: return "Register SP";
+        case reg_de: return "Register DE";
+        case reg_af: return "Register AF";
+        case immediate_u8: return "Immediate 8 bit";
+        case immediate_u16: return "Immediate 16 bit";
+        case NONE: return "Operand NONE";
+        default: return "[WARNING]: DebugLookUpOperand() cannot find operand to return const char*!";
+    }
+}
+
+
+const char* CPU::DebugLookUpAddressMode(EAddressMode AddressModeToLookUp) {
+    switch(AddressModeToLookUp) {
+        case AM_IMP: return "Address Mode IMP";
+        case AM_R_D16: return "Address Mode R_D16";
+        case AM_R_R: return "Address Mode R_R";
+        case AM_MR_R: return "Address Mode MR_R";
+        case AM_R: return "Address Mode R";
+        case AM_R_D8: return "Address Mode R_D8";
+        case AM_R_MR: return "Address Mode R_MR";
+        case AM_R_HLI: return "Address Mode R_HLI";
+        case AM_R_HLD: return "Address Mode R_HLD";
+        case AM_HLI_R: return "Address Mode HLI_R";
+        case AM_HLD_R: return "Address Mode HLD_R";
+        case AM_R_A8: return "Address Mode R_A8";
+        case AM_A8_R: return "Address Mode A8_R";
+        case AM_HL_SPR: return "Address Mode HL_SPR";
+        case AM_D16: return "Address Mode D16";
+        case AM_D8: return "Address Mode D8";
+        case AM_D16_R: return "Address Mode D16_R";
+        case AM_MR_D8: return "Address Mode MR_D8";
+        case AM_MR: return "Address Mode MR";
+        case AM_A16_R: return "Address Mode A16_R";
+        case AM_R_A16: return "Address Mode R_A16";
+        case AM_NONE: return "Address Mode NONE";
+        default: return "[WARNING]: DebugLookUpAddressMode() cannot find addr_mode to return const char*!";
+    }
+}
+
+Instruction CPU::SearchInstructionByOpcode(u8 SearchOpcode)
 {
     return InstructionSet[SearchOpcode];
 }
 
 template <typename T>
-register_type CPU::CheckRegisterType(T RegisterToCheck)
+ERegisterType CPU::CheckRegisterType(T RegisterToCheck)
 {
     if (sizeof(RegisterToCheck) == sizeof(char)){
         return U8REG;
     } else if(sizeof(RegisterToCheck) == sizeof(short)){
         return U16REG;
     } else {
-        std::cerr << "[ERROR]: NONE_REG in checkRegisterType was been thown!" << std::endl;
+        ErrorLogMessage("[ERROR]: NONE_REG in checkRegisterType was been thown!");
+        TerminateCPU();
         return NONE_REG;
     }
 }
@@ -336,7 +436,7 @@ void CPU::BitOperationRRA(bool Carry) {
     SetFlag((bool)Bit0, CARRY);
 }
 
-void CPU::BitOperationSET(u8& Register, int Bit) {
+void CPU::BitOperationSet(u8& Register, int Bit) {
     u8 BitMask = 1 << Bit;
     u8 value = Register | BitMask;
     Register = value;
@@ -436,7 +536,7 @@ void CPU::BitOperationSet(u16 Register, int Bit) {
     MainRAM.WriteU8Data(Register, value);
 }
 
-void CPU::ExecuteInstruction(instruction InstructionToExecute) {
+void CPU::ExecuteInstruction(Instruction InstructionToExecute) {
     u8 Opcode = RegisterSet.PC;
     u16 OperationResult;
     u16 Carry;
@@ -516,7 +616,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break; 
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_LD! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_LD! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
             }
             break;
         }
@@ -548,10 +649,11 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_DEC! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_DEC! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
         }
+        break;
         
-
     case IN_ADD:
         switch(InstructionToExecute.InstructionAddressMode) {
             case AM_R_R:
@@ -578,8 +680,10 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 } 
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADD! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_ADD! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
         }
+        break;
 
     case IN_OR:
         switch(InstructionToExecute.InstructionAddressMode) {
@@ -594,7 +698,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_OR! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_OR! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode)); 
+                TerminateCPU();
         }
         break;
 
@@ -609,9 +714,10 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
             case AM_R_D8:
                 OperationResult = (u16) (RegisterSet.A ^= MainRAM.ReadU8Data(RegisterSet.PC++));
                 break;
-            
+            case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_XOR! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_XOR! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
         }
         break;
 
@@ -626,9 +732,10 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
             case AM_R_D8:
                 OperationResult = (u16) ( RegisterSet.A &= MainRAM.ReadU8Data(RegisterSet.PC++));
                 break;
-            
+            case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_AND! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_AND! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
     }
         break;
 
@@ -646,7 +753,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_JP! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_JP! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode)); 
+                TerminateCPU();
         }
         break;
 
@@ -691,8 +799,10 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 }
                 break;
             }
+            case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CALL! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_CALL! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
         }
 
     case IN_RET:
@@ -707,7 +817,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 }
                 break;
             default: 
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_RET! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_RET! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
          }
          break;
 
@@ -732,7 +843,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 OperationResult, Carry = RegisterSet.A - MainRAM.ReadU8Data(RegisterSet.PC++);
                 break;
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_CP! : " << InstructionToExecute.InstructionAddressMode << std::endl; 
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_CP! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU(); 
         }
         break;
 
@@ -749,7 +861,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_SUB! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_SUB! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode)); 
+                TerminateCPU();
         }
         break;
 
@@ -766,7 +879,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_ADC! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_ADC! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode)); 
+                TerminateCPU();
         }
         break;
     
@@ -783,7 +897,8 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
                 break;
             case AM_NONE:
             default:
-                std::cerr << "[ERROR]: Cannot find addr_mode for instruction IN_SBC! : " << InstructionToExecute.InstructionAddressMode << std::endl;
+                ErrorLogMessage("[ERROR]: Cannot find addr_mode for instruction IN_SBC! : ", DebugLookUpAddressMode(InstructionToExecute.InstructionAddressMode));
+                TerminateCPU();
         }
         break;
 
@@ -838,7 +953,7 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
     
     case IN_RLA:
         RegisterSet.A = ((RegisterSet.A << 1) | (RegisterSet.A >> (8 - 1)));
-        BitOperationSET(RegisterSet.A, GetFlagInteger(CARRY));
+        BitOperationSet(RegisterSet.A, GetFlagInteger(CARRY));
         break;
 
     case IN_NOP:
@@ -850,13 +965,15 @@ void CPU::ExecuteInstruction(instruction InstructionToExecute) {
     
     case IN_NONE:
     default:
-        std::cerr << "[ERROR]: Cannot find MNEMONIC for instruction! " << std::endl;
-
+        ErrorLogMessage("[ERROR]: Cannot find MNEMONIC for instruction!");
+        TerminateCPU();
     }
-    
-    CycleCPU(InstructionToExecute.InstructionCycles);
-    CheckAffectedFlags(OperationResult, InstructionToExecute.InstructionAffectFlags, Carry);
-    RegisterSet.PC++;
+
+    if(!CPUShutDown) {
+        CycleCPU(InstructionToExecute.InstructionCycles);
+        CheckAffectedFlags(OperationResult, InstructionToExecute.InstructionAffectFlags, Carry);
+        RegisterSet.PC++;
+    }
 }               
 
 void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
@@ -1374,31 +1491,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xc7:  // Set Bit 0 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 0);
+            BitOperationSet(RegisterSet.A, 0);
             CycleCPU(8);
             break;
         case 0xc0:  // Set Bit 0 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 0);
+            BitOperationSet(RegisterSet.B, 0);
             CycleCPU(8);
             break;
         case 0xc1:  // Set Bit 0 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 0);
+            BitOperationSet(RegisterSet.C, 0);
             CycleCPU(8);
             break;
         case 0xc2:  // Set Bit 0 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 0);
+            BitOperationSet(RegisterSet.D, 0);
             CycleCPU(8);
             break;
         case 0xc3:  // Set Bit 0 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 0);
+            BitOperationSet(RegisterSet.E, 0);
             CycleCPU(8);
             break;
         case 0xc4:  // Set Bit 0 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 0);
+            BitOperationSet(RegisterSet.H, 0);
             CycleCPU(8);
             break;
         case 0xc5:  // Set Bit 0 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 0);
+            BitOperationSet(RegisterSet.L, 0);
             CycleCPU(8);
             break;
         case 0xc6:  // Set Bit 0 in byte at (HL), flags not affected
@@ -1406,31 +1523,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xcf:  // Set Bit 1 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 1);
+            BitOperationSet(RegisterSet.A, 1);
             CycleCPU(8);
             break;
         case 0xc8:  // Set Bit 1 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 1);
+            BitOperationSet(RegisterSet.B, 1);
             CycleCPU(8);
             break;
         case 0xc9:  // Set Bit 1 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 1);
+            BitOperationSet(RegisterSet.C, 1);
             CycleCPU(8);
             break;
         case 0xca:  // Set Bit 1 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 1);
+            BitOperationSet(RegisterSet.D, 1);
             CycleCPU(8);
             break;
         case 0xcb:  // Set Bit 1 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 1);
+            BitOperationSet(RegisterSet.E, 1);
             CycleCPU(8);
             break;
         case 0xcc:  // Set Bit 1 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 1);
+            BitOperationSet(RegisterSet.H, 1);
             CycleCPU(8);
             break;
         case 0xcd:  // Set Bit 1 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 1);
+            BitOperationSet(RegisterSet.L, 1);
             CycleCPU(8);
             break;
         case 0xce:  // Set Bit 1 in byte at (HL), flags not affected
@@ -1438,31 +1555,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xd7:  // Set Bit 2 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 2);
+            BitOperationSet(RegisterSet.A, 2);
             CycleCPU(8);
             break;
         case 0xd0:  // Set Bit 2 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 2);
+            BitOperationSet(RegisterSet.B, 2);
             CycleCPU(8);
             break;
         case 0xd1:  // Set Bit 2 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 2);
+            BitOperationSet(RegisterSet.C, 2);
             CycleCPU(8);
             break;
         case 0xd2:  // Set Bit 2 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 2);
+            BitOperationSet(RegisterSet.D, 2);
             CycleCPU(8);
             break;
         case 0xd3:  // Set Bit 2 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 2);
+            BitOperationSet(RegisterSet.E, 2);
             CycleCPU(8);
             break;
         case 0xd4:  // Set Bit 2 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 2);
+            BitOperationSet(RegisterSet.H, 2);
             CycleCPU(8);
             break;
         case 0xd5:  // Set Bit 2 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 2);
+            BitOperationSet(RegisterSet.L, 2);
             CycleCPU(8);
             break;
         case 0xd6:  // Set Bit 2 in byte at (HL), flags not affected
@@ -1470,31 +1587,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xdf:  // Set Bit 3 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 3);
+            BitOperationSet(RegisterSet.A, 3);
             CycleCPU(8);
             break;
         case 0xd8:  // Set Bit 3 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 3);
+            BitOperationSet(RegisterSet.B, 3);
             CycleCPU(8);
             break;
         case 0xd9:  // Set Bit 3 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 3);
+            BitOperationSet(RegisterSet.C, 3);
             CycleCPU(8);
             break;
         case 0xda:  // Set Bit 3 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 3);
+            BitOperationSet(RegisterSet.D, 3);
             CycleCPU(8);
             break;
         case 0xdb:  // Set Bit 3 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 3);
+            BitOperationSet(RegisterSet.E, 3);
             CycleCPU(8);
             break;
         case 0xdc:  // Set Bit 3 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 3);
+            BitOperationSet(RegisterSet.H, 3);
             CycleCPU(8);
             break;
         case 0xdd:  // Set Bit 3 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 3);
+            BitOperationSet(RegisterSet.L, 3);
             CycleCPU(8);
             break;
         case 0xde:  // Set Bit 3 in byte at (HL), flags not affected
@@ -1502,31 +1619,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xe7:  // Set Bit 4 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 4);
+            BitOperationSet(RegisterSet.A, 4);
             CycleCPU(8);
             break;
         case 0xe0:  // Set Bit 4 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 4);
+            BitOperationSet(RegisterSet.B, 4);
             CycleCPU(8);
             break;
         case 0xe1:  // Set Bit 4 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 4);
+            BitOperationSet(RegisterSet.C, 4);
             CycleCPU(8);
             break;
         case 0xe2:  // Set Bit 4 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 4);
+            BitOperationSet(RegisterSet.D, 4);
             CycleCPU(8);
             break;
         case 0xe3:  // Set Bit 4 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 4);
+            BitOperationSet(RegisterSet.E, 4);
             CycleCPU(8);
             break;
         case 0xe4:  // Set Bit 4 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 4);
+            BitOperationSet(RegisterSet.H, 4);
             CycleCPU(8);
             break;
         case 0xe5:  // Set Bit 4 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 4);
+            BitOperationSet(RegisterSet.L, 4);
             CycleCPU(8);
             break;
         case 0xe6:  // Set Bit 4 in byte at (HL), flags not affected
@@ -1534,31 +1651,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xef:  // Set Bit 5 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 5);
+            BitOperationSet(RegisterSet.A, 5);
             CycleCPU(8);
             break;
         case 0xe8:  // Set Bit 5 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 5);
+            BitOperationSet(RegisterSet.B, 5);
             CycleCPU(8);
             break;
         case 0xe9:  // Set Bit 5 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 5);
+            BitOperationSet(RegisterSet.C, 5);
             CycleCPU(8);
             break;
         case 0xea:  // Set Bit 5 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 5);
+            BitOperationSet(RegisterSet.D, 5);
             CycleCPU(8);
             break;
         case 0xeb:  // Set Bit 5 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 5);
+            BitOperationSet(RegisterSet.E, 5);
             CycleCPU(8);
             break;
         case 0xec:  // Set Bit 5 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 5);
+            BitOperationSet(RegisterSet.H, 5);
             CycleCPU(8);
             break;
         case 0xed:  // Set Bit 5 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 5);
+            BitOperationSet(RegisterSet.L, 5);
             CycleCPU(8);
             break;
         case 0xee:  // Set Bit 5 in byte at (HL), flags not affected
@@ -1566,31 +1683,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
        case 0xf7:  // Set Bit 6 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 6);
+            BitOperationSet(RegisterSet.A, 6);
             CycleCPU(8);
             break;
         case 0xf0:  // Set Bit 6 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 6);
+            BitOperationSet(RegisterSet.B, 6);
             CycleCPU(8);
             break;
         case 0xf1:  // Set Bit 6 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 6);
+            BitOperationSet(RegisterSet.C, 6);
             CycleCPU(8);
             break;
         case 0xf2:  // Set Bit 6 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 6);
+            BitOperationSet(RegisterSet.D, 6);
             CycleCPU(8);
             break;
         case 0xf3:  // Set Bit 6 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 6);
+            BitOperationSet(RegisterSet.E, 6);
             CycleCPU(8);
             break;
         case 0xf4:  // Set Bit 6 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 6);
+            BitOperationSet(RegisterSet.H, 6);
             CycleCPU(8);
             break;
         case 0xf5:  // Set Bit 6 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 6);
+            BitOperationSet(RegisterSet.L, 6);
             CycleCPU(8);
             break;
         case 0xf6:  // Set Bit 6 in byte at (HL), flags not affected
@@ -1598,31 +1715,31 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             CycleCPU(16);
             break;
         case 0xff:  // Set Bit 7 in register A, flags not affected
-            BitOperationSET(RegisterSet.A, 7);
+            BitOperationSet(RegisterSet.A, 7);
             CycleCPU(8);
             break;
         case 0xf8:  // Set Bit 7 in register B, flags not affected
-            BitOperationSET(RegisterSet.B, 7);
+            BitOperationSet(RegisterSet.B, 7);
             CycleCPU(8);
             break;
         case 0xf9:  // Set Bit 7 in register C, flags not affected
-            BitOperationSET(RegisterSet.C, 7);
+            BitOperationSet(RegisterSet.C, 7);
             CycleCPU(8);
             break;
         case 0xfa:  // Set Bit 7 in register D, flags not affectedy
-            BitOperationSET(RegisterSet.D, 7);
+            BitOperationSet(RegisterSet.D, 7);
             CycleCPU(8);
             break;
         case 0xfb:  // Set Bit 7 in register E, flags not affected
-            BitOperationSET(RegisterSet.E, 7);
+            BitOperationSet(RegisterSet.E, 7);
             CycleCPU(8);
             break;
         case 0xfc:  // Set Bit 7 in register H, flags not affected
-            BitOperationSET(RegisterSet.H, 7);
+            BitOperationSet(RegisterSet.H, 7);
             CycleCPU(8);
             break;
         case 0xfd:  // Set Bit 7 in register L, flags not affected
-            BitOperationSET(RegisterSet.L, 7);
+            BitOperationSet(RegisterSet.L, 7);
             CycleCPU(8);
             break;
         case 0xfe:  // Set Bit 7 in byte at (HL), flags not affected
@@ -1887,6 +2004,7 @@ void CPU::CBPrefixInstructionExecute(const u8 CBInstructionToExecute) {
             break;
         
         default:
-            std::cerr << "[ERROR]: Cannot find opcode for CB instruction! : " << CBInstructionToExecute << std::endl;
+            ErrorLogMessage("[ERROR]: Cannot find opcode for CB instruction! : ", CBInstructionToExecute);
+            TerminateCPU();
     }
 }

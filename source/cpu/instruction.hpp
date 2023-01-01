@@ -3,24 +3,14 @@
 
 #include "../include.hpp"
 
-enum FLAGS {
+enum EFlags {
     ZERO,
     ADDSUB,
     HALF,
     CARRY
 };
 
-static const char* DebugLookUpFlag(FLAGS FlagToLookUp) {
-    switch(FlagToLookUp) {
-        case ZERO: return "ZERO";
-        case ADDSUB: return "ADDSUB";
-        case HALF: return "HALF";
-        case CARRY: return "CARRY";
-        default: return "[WARNING]: DebugLookUpFlag() cannot find flag to return const char*!";
-    }
-}
-
-enum mnemonic {
+enum EMnemonic {
     IN_LD,
     IN_LDH,
     IN_PUSH,
@@ -58,48 +48,7 @@ enum mnemonic {
     IN_NONE
 };
 
-const char* DebugLookUpMnemonic(mnemonic MnemonicToLookUp) {
-    switch(MnemonicToLookUp) {
-        case IN_LD: return "Instruction LD";
-        case IN_LDH: return "Instruction LDH";
-        case IN_PUSH: return "Instruction PUSH";
-        case IN_POP: return "Instruction POP";
-        case IN_ADD: return "Instruction ADD";
-        case IN_ADC: return "Instruction ADC";
-        case IN_SUB: return "Instruction SUB";
-        case IN_SBC: return "Instruction SBC";
-        case IN_CP: return "Instruction CP";
-        case IN_INC: return "Instruction INC";
-        case IN_DEC: return "Instruction DEC";
-        case IN_AND: return "Instruction AND";
-        case IN_OR: return "Instruction OR";
-        case IN_XOR: return "Instruction XOR";
-        case IN_CCF: return "Instruction CCF";
-        case IN_SCF: return "Instruction SCF";
-        case IN_DAA: return "Instruction DAA";
-        case IN_CPL: return "Instruction CPL";
-        case IN_JP: return "Instruction JP";
-        case IN_JR: return "Instruction JR";
-        case IN_CALL: return "Instruction CALL";
-        case IN_RET: return "Instruction RET";
-        case IN_RETI: return "Instruction RETI";
-        case IN_RST: return "Instruction RST";
-        case IN_HALT: return "Instruction HALT";
-        case IN_STOP: return "Instruction STOP";
-        case IN_DI: return "Instruction DI";
-        case IN_EI: return "Instruction EI";
-        case IN_NOP: return "Instruction NOP";
-        case IN_RRA: return "Instruction RRA";
-        case IN_RLA: return "Instruction RLA";
-        case IN_CB: return "Instruction CB";
-        case IN_RRCA: return "Instruction RRCA";
-        case IN_RLCA: return "Instruction RLCA";
-        case IN_NONE: return "Instruction NONE";
-        default: return "[WARNING]: DebugLookUpMnemonic() cannot find Mnemonic to return const char*!";
-    }
-}
-
-enum addr_mode {
+enum EAddressMode {
     AM_IMP,
     AM_R_D16,
     AM_R_R,
@@ -124,35 +73,7 @@ enum addr_mode {
     AM_NONE
 };
 
-const char* DebugLookUpAddressMode(addr_mode AddressModeToLookUp) {
-    switch(AddressModeToLookUp) {
-        case AM_IMP: return "Address Mode IMP";
-        case AM_R_D16: return "Address Mode R_D16";
-        case AM_R_R: return "Address Mode R_R";
-        case AM_MR_R: return "Address Mode MR_R";
-        case AM_R: return "Address Mode R";
-        case AM_R_D8: return "Address Mode R_D8";
-        case AM_R_MR: return "Address Mode R_MR";
-        case AM_R_HLI: return "Address Mode R_HLI";
-        case AM_R_HLD: return "Address Mode R_HLD";
-        case AM_HLI_R: return "Address Mode HLI_R";
-        case AM_HLD_R: return "Address Mode HLD_R";
-        case AM_R_A8: return "Address Mode R_A8";
-        case AM_A8_R: return "Address Mode A8_R";
-        case AM_HL_SPR: return "Address Mode HL_SPR";
-        case AM_D16: return "Address Mode D16";
-        case AM_D8: return "Address Mode D8";
-        case AM_D16_R: return "Address Mode D16_R";
-        case AM_MR_D8: return "Address Mode MR_D8";
-        case AM_MR: return "Address Mode MR";
-        case AM_A16_R: return "Address Mode A16_R";
-        case AM_R_A16: return "Address Mode R_A16";
-        case AM_NONE: return "Address Mode NONE";
-        default: return "[WARNING]: DebugLookUpAddressMode() cannot find addr_mode to return const char*!";
-    }
-}
-
-enum operand {
+enum EOperand {
     reg_a,
     reg_b, 
     reg_c,
@@ -170,44 +91,66 @@ enum operand {
     NONE
 };
 
-const char* DebugLookUpOperand(operand OperandToLookUp) {
-    switch(OperandToLookUp) {
-        case reg_a: return "Register A";
-        case reg_b: return "Register B"; 
-        case reg_c: return "Register C";
-        case reg_d: return "Register D";
-        case reg_e: return "Register E";
-        case reg_h: return "Register H";
-        case reg_l: return "Register L";
-        case reg_bc: return "Register BC";
-        case reg_hl: return "Register HL";
-        case reg_sp: return "Register SP";
-        case reg_de: return "Register DE";
-        case reg_af: return "Register AF";
-        case immediate_u8: return "Immediate 8 bit";
-        case immediate_u16: return "Immediate 16 bit";
-        case NONE: return "Operand NONE";
-        default: return "[WARNING]: DebugLookUpOperand() cannot find operand to return const char*!";
-    }
-}
-
-enum register_type {
+enum ERegisterType {
     U8REG,
     U16REG,
     NONE_REG
 };
 
-struct instruction {
-    mnemonic InstructionMnemonic;
-    addr_mode InstructionAddressMode;
-    operand InstructionOperand01;
-    operand InstructionOperand02;
+struct Instruction {
+    EMnemonic InstructionMnemonic;
+    EAddressMode InstructionAddressMode;
+    EOperand InstructionOperand01;
+    EOperand InstructionOperand02;
     const char* InstructionAffectFlags;
     int InstructionCycles;
     u8 InstructionRSTOpcode;
 };
 
-const struct instruction InstructionSet[0x100] = { 
+struct Registers{
+    struct {
+        union {
+            struct {
+                u8 A;
+                u8 F;
+            };
+        };
+        u16 AF;
+    };
+    struct {
+        union {
+            struct {
+                u8 C;
+                u8 B;
+            };
+        };
+        u16 BC;
+    };
+    struct {
+        union {
+            struct {
+                u8 E;
+                u8 D;
+            };
+        };
+        u16 DE;
+    };
+    struct {
+        union {
+            struct {
+                u8 H;
+                u8 L;
+            };
+        };
+        u16 HL;
+    };
+
+    u16 SP;
+    u16 PC;
+
+};
+
+const struct Instruction InstructionSet[0x100] = { 
 
         // [opcode] = {instruction_function, address_mode, operand01, operand02, "flags", cycles, opcode_jp_condition}
 
